@@ -72,7 +72,14 @@ On an Intel Mac, `requirements-torch.txt` pins `torch==2.2.2` and `numpy<2`.
 That is intentional.
 
 If you want computation-graph visualizations for the autodiff engine, install
-Graphviz on your machine as well.
+the Graphviz system package as well. On macOS with Homebrew:
+
+```bash
+brew install graphviz
+```
+
+If Jupyter was already open when `graphviz` was installed, restart the kernel
+before re-running the visualization cell so `dot` is picked up from `PATH`.
 
 ## Research loop
 
