@@ -1,0 +1,11 @@
+-r requirements.txt
+
+# PyTorch packaging on macOS Intel is a special case:
+# - official macOS x86_64 wheels stopped after torch 2.2.x
+# - torch 2.2.x predates Python 3.13 support
+#
+# So on an Intel Mac, use Python 3.11/3.12 and pin torch 2.2.2.
+# On other platforms, the general spec below is fine.
+numpy<2; sys_platform == "darwin" and platform_machine == "x86_64"
+torch==2.2.2; sys_platform == "darwin" and platform_machine == "x86_64" and python_version < "3.13"
+torch>=2.2; sys_platform != "darwin" or platform_machine != "x86_64"
