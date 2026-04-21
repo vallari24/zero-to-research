@@ -104,3 +104,50 @@ Backward pass:
 
 That is the core idea of backprop: compute forward once, then send gradients
 backward by multiplying local derivatives.
+
+## From scalar values to a small MLP
+
+Neural networks are mathematical expressions. They take input data, combine it
+with learned weights and biases, and produce predictions through a forward pass.
+
+The same scalar engine can build a neural network by composing simple pieces:
+
+- `Neuron`: stores weights and a bias, computes `tanh(w * x + b)`
+- `Layer`: runs several neurons on the same input, returning several outputs
+- `MLP`: stacks layers so each layer's output becomes the next layer's input
+
+For example, `MLP(3, [4, 4, 1])` means:
+
+```text
+3 inputs -> 4 neurons -> 4 neurons -> 1 output
+```
+
+Training adds one more scalar: the loss. A simple squared-error loss is:
+
+```python
+loss = sum((yout - ygt) ** 2 for ygt, yout in zip(ys, ypred))
+```
+
+The loss asks: how far are the predictions from the targets? It is designed to
+be low when the network predicts well and high when it predicts poorly.
+
+The training step is:
+
+```python
+for p in model.parameters():
+    p.grad = 0.0
+
+loss.backward()
+
+for p in model.parameters():
+    p.data += -0.01 * p.grad
+```
+
+Gradients are reset because each step needs the slope at the current weights.
+Inside one backward pass, gradients should accumulate across graph paths. Across
+training steps, old gradients describe old weights, so they must be cleared
+before measuring the next direction.
+
+The full loop is: run the forward pass, measure prediction quality with the
+loss, backpropagate the loss to get gradients, update the weights, and repeat.
+Repeated updates move the parameters toward values that minimize the loss.
