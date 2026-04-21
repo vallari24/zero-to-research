@@ -151,3 +151,54 @@ before measuring the next direction.
 The full loop is: run the forward pass, measure prediction quality with the
 loss, backpropagate the loss to get gradients, update the weights, and repeat.
 Repeated updates move the parameters toward values that minimize the loss.
+
+## Tiny training experiment
+
+Question: can the tiny MLP fit a four-example toy dataset?
+
+Setup:
+
+```text
+model = MLP(3, [4, 4, 1])
+learning_rate = 0.05
+steps = 50
+```
+
+Result:
+
+| step | loss |
+| --- | ---: |
+| 0 | 5.2305 |
+| 10 | 0.2131 |
+| 20 | 0.0845 |
+| 30 | 0.0502 |
+| 40 | 0.0349 |
+| 50 | 0.0265 |
+
+The loss falls quickly, which is the first useful signal that the scalar
+autodiff engine, backpropagation, and parameter updates are working together.
+
+## Gradient checker
+
+A gradient checker verifies whether the gradients from backprop match an
+independent finite-difference estimate:
+
+```text
+dL/dp ~= (L(p + eps) - L(p - eps)) / (2 * eps)
+```
+
+It is not something to run every training step. It is a debugging tool for
+custom autodiff engines, custom layers, custom losses, or manual backward code.
+
+For this tiny MLP, the checker compared all `41` parameter gradients after
+training:
+
+| check | result |
+| --- | ---: |
+| max absolute difference | < 4e-11 |
+| mean absolute difference | ~1e-11 |
+
+As a negative control, calling `backward()` twice without clearing `.grad`
+caused the checker to fail, with max absolute difference around `8.46e-2`.
+That confirms the checker can catch stale accumulated gradients, not just
+validate the happy path.
