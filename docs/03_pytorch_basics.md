@@ -287,6 +287,71 @@ So the usual pattern is:
 - linear step: `z = x @ w.T + b`
 - activation step: `y = relu(z)`
 
+## nn.LayerNorm
+
+`nn.LayerNorm` normalizes values across the last dimension for each example. It
+is often used to keep activations in a stable range.
+
+```python
+import torch
+import torch.nn as nn
+
+x = torch.tensor([[1.0, 2.0, 3.0],
+                  [4.0, 5.0, 6.0]])
+
+layer_norm = nn.LayerNorm(3)
+y = layer_norm(x)
+print(y.shape)
+```
+
+Here:
+
+- `x.shape` is `[2, 3]`
+- each row has 3 numbers
+- `nn.LayerNorm(3)` means: normalize groups of 3 numbers at a time
+
+So `layer_norm(x)` normalizes each row separately:
+
+- `[1, 2, 3]` becomes roughly `[-1.22, 0.00, 1.22]`
+- `[4, 5, 6]` becomes roughly `[-1.22, 0.00, 1.22]`
+
+`y.shape` stays the same as `x.shape`, so:
+
+```python
+torch.Size([2, 3])
+```
+
+LayerNorm changes the values, not the shape.
+
+## nn.Dropout
+
+`nn.Dropout(p)` randomly zeros some values during training. It is used as a
+regularizer so the model does not rely too much on any single feature.
+
+```python
+import torch
+import torch.nn as nn
+
+x = torch.tensor([[1.0, 1.0, 1.0, 1.0]])
+dropout = nn.Dropout(p=0.5)
+
+y = dropout(x)  # training mode
+print(y)
+```
+
+Possible output:
+
+```python
+tensor([[0., 2., 0., 2.]])
+```
+
+With `p=0.5`:
+
+- each value has a 50% chance of becoming `0`
+- kept values are scaled up
+
+During evaluation, dropout is turned off.
+
 ## nn.Softmax
 
 `nn.Softmax(dim=...)` is the module version of `torch.softmax`. It turns values
@@ -348,16 +413,28 @@ thing.
 `nn.Embedding(num_embeddings, embedding_dim)` maps integer ids to learned dense
 vectors.
 
-Example:
+Important terms:
+
+- `token`: one discrete item, such as a character or a word
+- `vocab`: the full set of allowed tokens
+- `vocab_size`: how many tokens are in the vocab
+- `embedding_dim`: how many numbers each token vector contains
+
+Character example:
 
 ```python
 import torch
 import torch.nn as nn
 
-embed = nn.Embedding(5, 3)
+stoi = {"a": 0, "b": 1, "c": 2}
 
-idx = torch.tensor([0, 2, 4])
-out = embed(idx)
+vocab_size = 3
+embedding_dim = 2
+
+embedding_layer = nn.Embedding(vocab_size, embedding_dim)
+
+ids = torch.tensor([[0, 1, 2, 1]])  # "abcb"
+out = embedding_layer(ids)
 
 print(out.shape)
 ```
@@ -365,20 +442,110 @@ print(out.shape)
 Output shape:
 
 ```python
-torch.Size([3, 3])
+torch.Size([1, 4, 2])
 ```
 
 Here:
 
-- `5` means there are 5 possible ids: `0` to `4`
-- `3` means each id gets a learned vector of length 3
-- input ids `[0, 2, 4]` become 3 embedding vectors
+- tokens are the characters `a`, `b`, `c`
+- `vocab_size = 3` because there are 3 possible character tokens
+- `embedding_dim = 2` because each character gets 2 learned numbers
+- input shape `[1, 4]` means 1 sequence with 4 character ids
+- output shape `[1, 4, 2]` means each character id became a 2D vector
 
-You can think of an embedding as a learnable lookup table:
+Example output shape:
 
 ```python
-vector = embedding_table[id]
+[
+  [
+    [0.2, -0.5],   # token 0 -> "a"
+    [1.1,  0.3],   # token 1 -> "b"
+    [-0.7, 2.0],   # token 2 -> "c"
+    [1.1,  0.3]    # token 1 -> "b" again
+  ]
+]
 ```
+
+The outer `1` is the batch, the `4` is the sequence length, and the final `2`
+is the size of each embedding vector.
+
+You can think of the embedding as a trainable table of shape `[3, 2]`:
+
+```python
+row 0 -> vector for "a"
+row 1 -> vector for "b"
+row 2 -> vector for "c"
+```
+
+So:
+
+- id `0` picks the row for `"a"`
+- id `1` picks the row for `"b"`
+- id `2` picks the row for `"c"`
+
+`embedding_layer(ids)` means: look up the row for each id and return those
+vectors in the same sequence order.
+
+For `"abcb"`:
+
+```python
+[0, 1, 2, 1]
+```
+
+becomes:
+
+```python
+[vec("a"), vec("b"), vec("c"), vec("b")]
+```
+
+Word example:
+
+```python
+stoi = {"i": 0, "love": 1, "pytorch": 2}
+
+embedding_layer = nn.Embedding(3, 4)
+
+sentence_ids = torch.tensor([[0, 1, 2]])
+word_vectors = embedding_layer(sentence_ids)
+
+print(word_vectors.shape)
+```
+
+Output shape:
+
+```python
+torch.Size([1, 3, 4])
+```
+
+Here:
+
+- the token is now a word
+- `vocab_size = 3` because there are 3 word tokens in this tiny vocab
+- `embedding_dim = 4` because each word gets a vector of length 4
+- `embedding_layer(sentence_ids)` returns one 4-number vector per word
+
+In larger language models, a token is often a subword piece instead of a full
+word, but the lookup idea is the same.
+
+One-hot comparison:
+
+- one-hot for `"b"` in vocab `["a", "b", "c"]` is `[0, 1, 0]`
+- that vector is sparse and mostly zeros
+- an embedding replaces it with a learned dense vector such as `[1.1, 0.3]`
+
+Conceptually:
+
+```python
+one_hot(token_id) @ W
+```
+
+and
+
+```python
+embedding_layer(token_id)
+```
+
+do the same lookup. `nn.Embedding` is just the efficient learned-table version.
 
 ## nn.Parameter
 
@@ -402,3 +569,139 @@ So in practice:
 
 - use plain tensors for ordinary values
 - use `nn.Parameter` for weights and biases you want the model to learn
+
+## Manual Update vs nn.Module
+
+From scratch, you might create loose tensors and update them yourself:
+
+```python
+W = torch.randn(1, 1, requires_grad=True)
+b = torch.zeros(1, requires_grad=True)
+
+loss.backward()
+
+with torch.no_grad():
+    W -= learning_rate * W.grad
+    b -= learning_rate * b.grad
+
+W.grad.zero_()
+b.grad.zero_()
+```
+
+This works, but it does not scale. If you have many layers, you do not want to
+manually update and zero every tensor one by one.
+
+The cleaner approach is:
+
+- `nn.Module` organizes the model and its parameters
+- `torch.optim` updates all registered parameters for you
+
+## nn.Module
+
+`nn.Module` is the standard PyTorch container for a model.
+
+Think of it as:
+
+- `__init__`: define the layers
+- `forward`: define how data flows through those layers
+
+Example:
+
+```python
+import torch
+import torch.nn as nn
+
+class LinearRegressionModel(nn.Module):
+    def __init__(self, in_features, out_features):
+        super().__init__()
+        self.linear_layer = nn.Linear(in_features, out_features)
+
+    def forward(self, x):
+        return self.linear_layer(x)
+```
+
+Build it:
+
+```python
+model = LinearRegressionModel(in_features=1, out_features=1)
+print(model)
+```
+
+Output:
+
+```python
+LinearRegressionModel(
+  (linear_layer): Linear(in_features=1, out_features=1, bias=True)
+)
+```
+
+Why this is better than loose tensors:
+
+- the weights and biases are stored inside the model
+- `model.parameters()` can find them automatically
+- you no longer manage each parameter by hand
+
+## torch.optim
+
+`torch.optim` contains optimizers such as SGD and Adam. An optimizer takes
+`model.parameters()` and knows how to update all of them.
+
+Example:
+
+```python
+import torch.optim as optim
+
+learning_rate = 0.01
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+loss_fn = nn.MSELoss()
+```
+
+Here:
+
+- `model.parameters()` gives the optimizer every learnable parameter
+- `optimizer` handles the weight updates
+- `loss_fn` computes the training loss
+
+## The Standard Training Step
+
+With `nn.Module` and `torch.optim`, the core loop becomes:
+
+```python
+optimizer.zero_grad()
+loss.backward()
+optimizer.step()
+```
+
+What each line means:
+
+- `optimizer.zero_grad()`: clear old gradients from the previous step
+- `loss.backward()`: compute new gradients for all model parameters
+- `optimizer.step()`: update all model parameters using those gradients
+
+This replaces the manual version:
+
+```python
+with torch.no_grad():
+    W -= learning_rate * W.grad
+    b -= learning_rate * b.grad
+
+W.grad.zero_()
+b.grad.zero_()
+```
+
+Same idea, better packaging.
+
+## Easy Memory Hook
+
+Use this picture:
+
+- `nn.Module` = the organized model blueprint
+- `nn.Parameter` = the learnable tensors inside it
+- `torch.optim` = the tool that updates those parameters
+
+So the full story is:
+
+1. Put layers inside an `nn.Module`.
+2. PyTorch registers their parameters.
+3. Pass `model.parameters()` to an optimizer.
+4. Run `zero_grad()`, `backward()`, `step()`.
