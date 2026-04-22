@@ -19,8 +19,10 @@ judgment, and technical writing.
 
 - `notebooks/00_project_template.ipynb`: reusable template for build notes
 - `notebooks/01_scalar_autodiff_engine.ipynb`: scalar autodiff engine build log
+- `notebooks/02_makemore_bigrams.ipynb`: lecture 2 bigram build + count-vs-neural data-regime experiment
 - `src/`: helper code factored out of notebooks
 - `data/`: local datasets and generated artifacts
+- `docs/02_makemore_bigrams_notes.md`: lecture 2 short bigram note
 
 ## Quick start
 
@@ -106,7 +108,7 @@ of walkthroughs.
 ## Good next experiments
 
 - scalar autodiff: add a numerical gradient checker for random scalar graphs
-- character model: compare embedding size or hidden size on validation loss
+- character model: compare count-based and neural bigrams across train-set size
 - transformer model: compare context length or parameter count versus loss
 
 ## Signals for a team
