@@ -134,6 +134,90 @@ tensor([[0.0474, 0.0474, 0.0474],
 This turns each column into a probability distribution, so each column sums to
 `1`.
 
+## Broadcasting
+
+Broadcasting means PyTorch can apply a smaller tensor across a bigger tensor
+automatically when the shapes line up.
+
+Example:
+
+```python
+t1 = torch.tensor([[1.0, 1.0],
+                   [1.0, 1.0]])
+
+t2 = torch.tensor([2.0, 3.0])
+
+print(t1.shape)  # torch.Size([2, 2])
+print(t2.shape)  # torch.Size([2])
+
+print(t1 + t2)
+```
+
+Result:
+
+```python
+tensor([[3., 4.],
+        [3., 4.]])
+```
+
+Why this works:
+
+- `t1` has shape `[2, 2]`
+- `t2` has shape `[2]`, which PyTorch can read as `[1, 2]`
+- then PyTorch repeats it across rows to act like `[2, 2]`
+
+So `t2` behaves like:
+
+```python
+[[2., 3.],
+ [2., 3.]]
+```
+
+Another very common example is row normalization:
+
+```python
+P = torch.randn(27, 27)
+row_sums = P.sum(dim=1, keepdim=True)
+
+print(P.shape)         # torch.Size([27, 27])
+print(row_sums.shape)  # torch.Size([27, 1])
+
+Q = P / row_sums
+```
+
+Why `keepdim=True` matters:
+
+- `sum(dim=1)` means sum across columns, so you get one value per row
+- `keepdim=True` keeps the result shaped like a column: `[27, 1]`
+- `[27, 1]` can broadcast to `[27, 27]` by repeating each row sum across all columns
+
+So PyTorch treats `row_sums` like:
+
+```python
+[[s1, s1, s1, ..., s1],
+ [s2, s2, s2, ..., s2],
+ ...
+]
+```
+
+That lets each row of `P` be divided by its own row sum.
+
+Broadcasting is very useful in LLM training:
+
+- adding bias in linear layers:
+  `x @ W.T + b`, where `b` has shape `[hidden]` and gets broadcast across batch and sequence positions
+- adding positional information:
+  token embeddings might have shape `[batch, time, hidden]` and positional embeddings `[time, hidden]`, which broadcast across the batch
+- attention masks:
+  an attention score tensor might be `[batch, heads, time, time]` while the mask is `[1, 1, time, time]`, which broadcasts across batches and heads
+- LayerNorm parameters:
+  learned scale and bias usually have shape `[hidden]` and broadcast across batch and time
+
+Short rule:
+
+- compare shapes from the right
+- dimensions are compatible if they match, or if one of them is `1`
+
 ## torch.gather
 
 `torch.gather(input, dim, index)` picks values from `input` along `dim`, using
