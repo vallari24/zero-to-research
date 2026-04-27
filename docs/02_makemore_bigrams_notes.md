@@ -1297,3 +1297,537 @@ current character
 In both cases, the model only uses one character of context. That is why it
 can learn local patterns like `an`, `el`, `ia`, and `mar`, but not deeper
 structure over long prefixes.
+
+## Notes
+
+A few short notes from extending the basic bigram model.
+
+In the notes below, average NLL means average negative log likelihood:
+
+```text
+lower NLL = better model
+higher NLL = worse model
+```
+
+Intuitively, NLL measures how surprised the model is by the correct next
+character. If the model gives high probability to the true next character, the
+NLL is low. If it gives low probability to the true next character, the NLL is
+higher.
+
+### Note 1. More Context Helps: Bigram vs Trigram
+
+**Concept**
+
+A bigram model predicts the next character from one previous character. A
+trigram model predicts the next character from two previous characters.
+
+The main idea is simple:
+
+```text
+more context -> less uncertainty about the next token
+```
+
+That does not guarantee a better model, but it often helps because the model
+gets a more specific conditioning signal.
+
+**Problem**
+
+The bigram model only sees one character of context. That is enough to learn
+local transitions like:
+
+```text
+a -> n
+q -> u
+```
+
+but it cannot distinguish between different two-character prefixes that end in
+the same final character.
+
+So the question becomes:
+
+```text
+if we let the model look at two characters instead of one,
+does the loss improve?
+```
+
+One concrete way to formulate that model is to start with a word like `emma`.
+
+For the bigram model, we attach one boundary token:
+
+```text
+. e m m a .
+```
+
+This creates the training pairs:
+
+```text
+. -> e
+e -> m
+m -> m
+m -> a
+a -> .
+```
+
+For the trigram model, we attach two boundary tokens at the start:
+
+```text
+. . e m m a .
+```
+
+Now each example uses two characters of context:
+
+```text
+. . -> e
+. e -> m
+e m -> m
+m m -> a
+m a -> .
+```
+
+So the model changes from:
+
+```text
+current 1 character -> distribution over next character
+```
+
+to:
+
+```text
+current 2 characters -> distribution over next character
+```
+
+The forward pass is the same pattern as before, just with a richer context:
+
+1. Take the current two-character context, such as `e m`.
+2. Look up the scores or probabilities associated with that context.
+3. Read out a 27-way distribution over the next character.
+4. Use the probability assigned to the true next character, here `m`, inside the NLL loss.
+
+In the count-based version, this means indexing a trigram table with shape:
+
+```text
+[27, 27, 27]
+```
+
+where:
+
+- first axis = first context character
+- second axis = second context character
+- third axis = predicted next character
+
+So `P[e, m, :]` means:
+
+```text
+given the context "em", what probabilities does the model assign to all
+possible next characters?
+```
+
+**Result**
+
+Yes. On the full dataset, the count-based trigram model beat the count-based
+bigram model:
+
+- bigram average NLL: `2.454577`
+- trigram average NLL: `2.212582`
+
+That is a meaningful drop. The main learning is that the extra character of
+context helps the model make better next-character predictions.
+
+### Note 2. Why Train / Dev / Test Splits Matter
+
+**Concept**
+
+A model should not only explain the data it was trained on. It should also work
+on held-out data.
+
+That is why we split the dataset into:
+
+- train: fit the model
+- dev: compare choices while building
+- test: evaluate once at the end
+
+This is the basic discipline that separates memorization from generalization.
+
+**Problem**
+
+If we evaluate on the full dataset only, it is easy to overestimate model
+quality. That matters even more once we move from bigrams to trigrams, because
+the trigram model has many more possible contexts and can fit the training data
+more aggressively.
+
+So the practical setup is:
+
+```text
+train on 80% of the names, then measure both models on train, dev, and test
+```
+
+**Result**
+
+The trigram model stayed better than the bigram model on every split:
+
+- train: bigram `2.455483`, trigram `2.215405`
+- dev: bigram `2.455158`, trigram `2.246454`
+- test: bigram `2.451399`, trigram `2.231170`
+
+Two patterns matter:
+
+1. The trigram model still wins on held-out data, so the extra context is
+   genuinely useful.
+2. Dev and test losses are a bit higher than train loss, which is the expected
+   generalization gap.
+
+### Note 3. Smoothing Is a Bias-Variance Tradeoff
+
+**Concept**
+
+Trigram models are more powerful than bigram models, but they are also much
+sparser. There are far more possible two-character contexts than one-character
+contexts, so many trigram events are rare or unseen.
+
+Smoothing prevents the model from treating unseen events as impossible with
+absolute certainty.
+
+In a count-based trigram model, smoothing means adding a small fake count to
+every possible next character before normalizing the row into probabilities.
+
+For example, suppose the context is `e m` and in training we only saw:
+
+```text
+e m -> m   1 time
+e m -> a   0 times
+e m -> .   0 times
+...
+```
+
+Without smoothing, the model would assign:
+
+```text
+P(m | em) = 1
+P(a | em) = 0
+P(. | em) = 0
+```
+
+That is too brittle. A held-out word might contain a valid continuation that
+never appeared in the training split.
+
+If we add smoothing value `alpha`, then each count becomes:
+
+```text
+new count = original count + alpha
+```
+
+So with `alpha = 1`, the row becomes:
+
+```text
+e m -> m   2
+e m -> a   1
+e m -> .   1
+...
+```
+
+After normalization, `m` is still the most likely continuation, but unseen
+continuations are no longer forced to probability `0`.
+
+Small smoothing means:
+
+```text
+trust the observed trigram counts more
+```
+
+Large smoothing means:
+
+```text
+flatten the model toward a more uniform distribution
+```
+
+**Problem**
+
+Without tuning, smoothing is just a guess. Too little smoothing makes the model
+sharp and brittle. Too much smoothing washes out real structure.
+
+So the setup is:
+
+```text
+1. train the trigram counts on the training split
+2. try several smoothing values such as 0.001, 0.01, 0.1, 1.0, 3.0
+3. for each value, compute average NLL on the dev split
+4. keep the smoothing value with the lowest dev NLL
+5. evaluate that choice once on the test split
+```
+
+Why use the dev split here?
+
+Because train loss alone will usually prefer very tiny smoothing. The train set
+rewards confident memorization. The dev set tells us whether that confidence
+still helps on new data.
+
+What does a high or low dev NLL mean in this setting?
+
+- low dev NLL: the model assigns relatively high probability to the true next
+  characters in held-out names
+- high dev NLL: the model is often surprised by the true next characters in
+  held-out names
+
+**Result**
+
+The useful pattern was:
+
+- when smoothing got smaller, train NLL improved
+- but after a point, dev NLL got worse
+- very large smoothing also hurt, because the model became too flat
+
+So there is a middle ground:
+
+```text
+not too sharp
+not too flat
+```
+
+In this run, a small positive smoothing value worked best. The best dev result
+came from smoothing `0.16`, with:
+
+- dev NLL: `2.232302`
+- final test NLL: `2.215837`
+
+You do not need to care about `0.16` as a magical number. The important point
+is what it represents:
+
+```text
+add a small amount of uncertainty back into every trigram row
+so the model generalizes better
+```
+
+That is the core regularization story in miniature:
+
+```text
+best train fit != best generalization
+```
+
+### Note 4. One-Hot Encoding Was Hiding a Lookup
+
+**Concept**
+
+In the neural bigram model, we often write:
+
+```python
+xenc = F.one_hot(xs, num_classes=27).float()
+logits = xenc @ W
+```
+
+But a one-hot vector has exactly one nonzero entry, so this matrix multiply is
+really just selecting rows from `W`.
+
+That means:
+
+```python
+W[xs]
+```
+
+does the same job more directly.
+
+Here `xs` is the batch of input character ids.
+
+For the word `emma`, the bigram inputs are:
+
+```text
+. -> e
+e -> m
+m -> m
+m -> a
+a -> .
+```
+
+So the input ids are:
+
+```text
+xs = [0, 5, 13, 13, 1]
+```
+
+using:
+
+```text
+. = 0
+e = 5
+m = 13
+a = 1
+```
+
+Now suppose `W` has shape:
+
+```text
+[27, 27]
+```
+
+Then:
+
+```python
+W[xs]
+```
+
+means:
+
+```text
+take row 0 of W
+take row 5 of W
+take row 13 of W
+take row 13 of W
+take row 1 of W
+stack them into one tensor
+```
+
+So `W[xs]` has shape:
+
+```text
+[5, 27]
+```
+
+which is exactly one row of next-character scores for each of the 5 training
+pairs in `emma`.
+
+The one-hot version does the same thing less directly.
+
+If the first input is `.`, its one-hot vector is:
+
+```text
+[1, 0, 0, 0, ..., 0]
+```
+
+Then:
+
+```text
+[1, 0, 0, 0, ..., 0] @ W
+```
+
+just selects the first row of `W`.
+
+If another input is `m`, its one-hot vector has the `1` at position `13`, so:
+
+```text
+[0, 0, ..., 1 at position 13, ..., 0] @ W
+```
+
+selects row `13` of `W`.
+
+So these two expressions are doing the same lookup:
+
+```python
+F.one_hot(xs, num_classes=27).float() @ W
+W[xs]
+```
+
+The second form is shorter because it skips building the explicit one-hot
+matrix.
+
+**Problem**
+
+The explicit one-hot vectors are conceptually useful when first learning the
+model, but they are wasteful once the mechanism is clear.
+
+So the practical question is:
+
+```text
+check whether one-hot matmul and direct row indexing are actually identical
+```
+
+**Result**
+
+They matched exactly in the check:
+
+- max absolute difference between `F.one_hot(xs) @ W` and `W[xs]`: `0.0`
+
+The learning is not just a micro-optimization. It clarifies what the model is
+really doing:
+
+```text
+character id -> row lookup -> scores for next character
+```
+
+### Note 5. Why `F.cross_entropy` Is the Right API
+
+**Concept**
+
+The manual loss for the neural model can be written as:
+
+```python
+probs = softmax(logits)
+loss = -log(probability assigned to the correct class).mean()
+```
+
+PyTorch packages that pattern in:
+
+```python
+F.cross_entropy(logits, targets)
+```
+
+It takes raw logits and computes the classification loss directly.
+
+**Problem**
+
+The manual version is good for learning, but not ideal for real code. It is
+longer, easier to get wrong, and less numerically stable.
+
+So the practical question is:
+
+```text
+verify that F.cross_entropy matches the manual negative log likelihood
+```
+
+**Result**
+
+The values matched up to floating-point precision:
+
+- manual NLL: `3.769305`
+- `F.cross_entropy`: `3.769305`
+- absolute difference: `2.384186e-07`
+
+Why prefer `F.cross_entropy` in practice:
+
+- it works directly on logits
+- it is numerically more stable than manual softmax-plus-log code
+- it is shorter and communicates intent immediately
+
+### Note 6. A Small Generative Check
+
+**Concept**
+
+Loss tells us how well the model scores the data, but generation tells us what
+kind of local structure the model has actually learned.
+
+This matters because a lower NLL is useful, but readers also want to know:
+
+```text
+do the samples sound more coherent?
+```
+
+**Problem**
+
+A better loss should usually correspond to better local generations, but that
+is worth checking instead of assuming.
+
+So the practical check is:
+
+```text
+compare sampled names from the bigram model and the tuned trigram model
+```
+
+**Result**
+
+The tuned trigram samples were more locally coherent. Example outputs included:
+
+- bigram: `janasah`, `cony`, `juwe`
+- trigram: `janasid`, `prelay`, `kalania`
+
+The measured sample statistics were small, but directionally consistent:
+
+- bigram average sample length: `8.4`
+- trigram average sample length: `6.8`
+- both produced `20/20` unique samples in the comparison batch
+
+The useful learning is qualitative:
+
+```text
+better context usually produces better local text
+```
+
+The trigram model still does not understand full name structure, but it is less
+likely to wander into obviously broken local transitions than the bigram model.
