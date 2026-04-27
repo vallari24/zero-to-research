@@ -561,26 +561,6 @@ transition table.
 Instead of storing counts directly, we learn a matrix of scores, then turn
 those scores into probabilities.
 
-Tiny example with vocabulary `. a b`:
-
-```text
-W =
-[
-  [score(.->.), score(.->a), score(.->b)],
-  [score(a->.), score(a->a), score(a->b)],
-  [score(b->.), score(b->a), score(b->b)]
-]
-```
-
-Read one row like this:
-
-```text
-row a = all next-character scores when the current character is a
-```
-
-So the row for `a` does not produce one number. It produces one score for each
-possible next token.
-
 That is why the full model uses a `[27, 27]` weight matrix:
 
 - `27` possible current characters
@@ -593,24 +573,16 @@ Rows correspond to current characters. Columns correspond to next characters.
 A neural net works with numbers, but raw integer ids like:
 
 ```text
+. -> 0
+e -> 5
+m -> 13
 a -> 1
-b -> 2
-z -> 26
 ```
 
-are only labels. They do not mean `z` is "more" than `a` in any useful way.
+are only labels. They do not mean one character is numerically "more" than
+another in a useful way.
 
 So we turn the current character into a one-hot vector.
-
-For the tiny vocabulary `. a b`:
-
-```text
-. -> [1, 0, 0]
-a -> [0, 1, 0]
-b -> [0, 0, 1]
-```
-
-This says which token is active without adding fake numeric meaning.
 
 Now the representation has one feature per possible token. That is the key
 bridge from NLP objects like characters into the numeric world that a neural
@@ -668,29 +640,39 @@ one-hot + matrix multiply = row lookup
 
 Why? Because a one-hot vector has only one active position.
 
-If the current character is `a`, the input vector is:
+Take the first pair in `emma`:
 
 ```text
-[0, 1, 0]
+. -> e
 ```
 
-Then:
+The current character is `.`. Its one-hot input vector has a `1` in the `.`
+position and `0` everywhere else.
+
+When we multiply that by `W`, we pick out the row of scores associated with
+the current character `.`.
+
+For the second pair:
 
 ```text
-[0, 1, 0] @ W
+e -> m
 ```
 
-returns the second row of `W`:
+the one-hot input picks out the row associated with `e`.
+
+For the third pair:
 
 ```text
-[score(a->.), score(a->a), score(a->b)]
+m -> m
 ```
 
-So the model is effectively saying:
+the one-hot input picks out the row associated with `m`.
+
+So the model is effectively doing:
 
 ```text
-current character = a
--> look at the a row
+current character = current row selector
+-> look at the matching row of W
 -> use those values as scores for all possible next characters
 ```
 
@@ -816,7 +798,16 @@ Read this as:
 - `xs` = current character ids
 - `ys` = correct next-character ids
 
-So the model pipeline is:
+So the matrix `W` can be thought of like this:
+
+```text
+one row per possible current character
+one column per possible next character
+```
+
+Each row holds all the next-character scores for one current character.
+
+The model pipeline is:
 
 ```text
 xs
@@ -840,7 +831,87 @@ If there are `5` training pairs in this small example, then:
 Each row of `probs` is the model's predicted probability distribution for one
 training example. Each row should sum to `1`.
 
-## Reading One Output Entry
+For `emma`, the five rows mean:
+
+- row `0` = probabilities for what comes after `.`
+- row `1` = probabilities for what comes after `e`
+- row `2` = probabilities for what comes after the first `m`
+- row `3` = probabilities for what comes after the second `m`
+- row `4` = probabilities for what comes after `a`
+
+More generally, let `i` be the row index. For each row `i`, there are two
+different questions we can ask.
+
+### 1. What does the model predict?
+
+For row `i`, the model's prediction is:
+
+```text
+argmax(probs[i])
+```
+
+This means:
+
+```text
+which next character got the highest predicted probability in row i?
+```
+
+### 2. What probability did the model assign to the correct answer?
+
+For `emma`, the correct next characters are:
+
+```text
+row 0 -> 5
+row 1 -> 13
+row 2 -> 13
+row 3 -> 1
+row 4 -> 0
+```
+
+In general, for row `i`, the probability used by the loss is:
+
+```text
+probs[i, ys[i]]
+```
+
+This means:
+
+```text
+for row i, take the probability assigned to the true next character
+```
+
+For `emma`, that becomes:
+
+```text
+probs[0, 5]
+probs[1, 13]
+probs[2, 13]
+probs[3, 1]
+probs[4, 0]
+```
+
+These are not the largest numbers in each row by definition. They are the
+probabilities assigned to the true next characters for the five `emma`
+training examples.
+
+So the distinction is:
+
+- `argmax(probs[i])` = the model's prediction for row `i`
+- `probs[i, ys[i]]` = the probability the model assigned to the correct next character for row `i`
+
+For example, when `i = 3`, row `3` corresponds to the pair:
+
+```text
+m -> a
+```
+
+So the correct column for the loss is `1`, not whichever column happens to be
+largest in that row. If the model gives the biggest probability to some other
+column, then the model predicted the wrong next character. The loss still uses
+column `1`, because training cares about the true label, not just the model's
+favorite guess.
+
+### Reading One Output Entry
 
 An expression like:
 
@@ -850,11 +921,11 @@ An expression like:
 
 means:
 
-- take the `4th` training example
+- take the `4th` training pair from `emma`
 - look at the score from the `14th` output neuron
 
 That single value is one scalar logit: the score the model assigns to next
-character `13` for example `3`.
+character `13` for row `i = 3`.
 
 Mathematically, it is a dot product between:
 
@@ -862,29 +933,15 @@ Mathematically, it is a dot product between:
 - column `13` of `W`
 
 Because the input row is one-hot, that dot product simplifies to a row lookup.
-So in this bigram model, one output entry is easiest to read as:
+In the `emma` example, row `3` is the second `m`, so this value means:
 
 ```text
-for this current character, what score did the model give to this possible next character?
+when the current character is m, what score did the model give to next character 13?
 ```
 
 ## From Probabilities to Loss
 
-For the `i`-th training example, the correct next character is `ys[i]`.
-
-So the important probability is:
-
-```text
-probs[i, ys[i]]
-```
-
-That means:
-
-```text
-the probability the model assigned to the correct next character
-```
-
-Then:
+Once we have the correct probabilities:
 
 - take `log` to get log likelihood
 - add a minus sign to get negative log likelihood
@@ -898,9 +955,325 @@ That gives one scalar number answering:
 How good were the model's predicted next-character probabilities on this dataset?
 ```
 
-The next step after this is optimization: adjusting the weights in `W` so that
-the model assigns higher probability to the correct next character and the
-average NLL goes down.
+In vectorized form, the probabilities used by the loss are:
+
+```text
+probs[0, ys[0]], probs[1, ys[1]], ..., probs[n-1, ys[n-1]]
+```
+
+In PyTorch this is written as:
+
+```python
+probs[torch.arange(n), ys]
+```
+
+and the average loss is:
+
+```python
+-probs[torch.arange(n), ys].log().mean()
+```
+
+## Forward Pass, Backward Pass, and Update
+
+Training a neural network repeats three steps.
+
+### Forward pass
+
+The forward pass means:
+
+```text
+take the current parameters
+-> run the input through the model
+-> compute the loss
+```
+
+For this model, the forward pass is:
+
+```text
+xs
+-> one-hot
+-> xenc @ W
+-> logits
+-> softmax
+-> probs
+-> NLL loss
+```
+
+For `emma`, the five training pairs are:
+
+```text
+. -> e
+e -> m
+m -> m
+m -> a
+a -> .
+```
+
+So one forward pass takes all five current-character inputs at once and produces
+five rows of probabilities:
+
+```text
+row 0 = probabilities for what comes after .
+row 1 = probabilities for what comes after e
+row 2 = probabilities for what comes after m
+row 3 = probabilities for what comes after m
+row 4 = probabilities for what comes after a
+```
+
+Then the loss looks at the probabilities of the correct next characters:
+
+```text
+probs[0, 5]
+probs[1, 13]
+probs[2, 13]
+probs[3, 1]
+probs[4, 0]
+```
+
+If those five numbers are small, the loss is high. If those five numbers get
+larger, the loss goes down.
+
+### Backward pass
+
+The backward pass means:
+
+```text
+compute how the loss changes when each parameter changes
+```
+
+For `emma`, suppose the model currently assigns low probability to the correct
+next characters. Then the backward pass tells us which entries of `W` should
+move so that:
+
+- the `.` row gives more probability to `e`
+- the `e` row gives more probability to `m`
+- the `m` row gives more probability to `m` and `a` in the right contexts
+- the `a` row gives more probability to `.`
+
+When we call:
+
+```python
+loss.backward()
+```
+
+PyTorch traces all the operations that created `loss` and uses the chain rule
+to fill in gradients such as:
+
+```text
+W.grad
+```
+
+Each entry of `W.grad` tells us:
+
+```text
+if this weight changes a little, how will the loss change?
+```
+
+That is why `backward()` feels magical. PyTorch has remembered the dependency
+graph from the forward pass and can differentiate all the way back to the
+parameters.
+
+The key idea is not that `backward()` guesses a new answer. It measures
+sensitivity:
+
+```text
+which weights most need to change to make the correct next-character
+probabilities larger and the loss smaller?
+```
+
+### Why the loss is differentiable
+
+The scalar loss in this model is:
+
+```python
+loss = -probs[torch.arange(n), ys].log().mean()
+```
+
+So:
+
+- `logits = xenc @ W` are not the loss
+- `counts = logits.exp()` are not the loss
+- `probs = counts / counts.sum(1, keepdim=True)` are not the loss
+- `loss` is the final average negative log likelihood computed from the
+  probabilities assigned to the correct next characters
+
+This works because each step from `W` to `loss` is differentiable:
+
+- matrix multiply is differentiable
+- `exp` is differentiable
+- division is differentiable
+- selecting `probs[torch.arange(n), ys]` is differentiable with respect to the
+  selected probability values
+- `log` is differentiable for positive inputs
+- `mean` is differentiable
+
+So the whole pipeline:
+
+```text
+W
+-> logits
+-> counts
+-> probs
+-> probs[torch.arange(n), ys]
+-> log
+-> mean
+-> loss
+```
+
+is differentiable.
+
+### Update step
+
+Once gradients are in `W.grad`, we move the weights a small step in the
+direction that lowers the loss:
+
+```python
+W.data += -lr * W.grad
+```
+
+This is gradient descent.
+
+If one entry of `W.grad` is positive, increasing that weight would increase the
+loss, so gradient descent moves the weight downward.
+
+If one entry of `W.grad` is negative, increasing that weight would decrease the
+loss, so gradient descent moves the weight upward.
+
+Then we run another forward pass and check the new loss. If learning is working
+properly, the loss should go down over time.
+
+For `emma`, the intuition after one update step is:
+
+- the row for `.` should become a little more favorable to `e`
+- the row for `e` should become a little more favorable to `m`
+- the row for `m` should become a little more favorable to `m` and `a`
+- the row for `a` should become a little more favorable to `.`
+
+So after the update, a new forward pass should ideally produce slightly higher
+values for:
+
+```text
+probs[0, 5], probs[1, 13], probs[2, 13], probs[3, 1], probs[4, 0]
+```
+
+and therefore a slightly lower average negative log likelihood.
+
+## Count Table vs Neural Net
+
+At this stage, the count-based bigram model and the neural bigram model often
+end up with very similar loss.
+
+That is not surprising. In this lecture, both models are solving essentially
+the same problem:
+
+- look at one current character
+- produce a distribution over the next character
+
+The count-based version stores that directly as a probability table.
+
+The neural version stores it as:
+
+- one-hot input
+- one linear layer
+- softmax output
+
+So the neural model here is still extremely simple. It is basically another
+way to parameterize the same bigram transition table.
+
+That is why the neural model does not suddenly become much better just because
+we used gradients. The context is still only one character, and the model is
+still only one layer deep.
+
+The reason to care about the neural approach is not that it wins immediately in
+this tiny setting. The reason is that it scales to richer models.
+
+For example, a count table becomes awkward very quickly if we want more
+context:
+
+- bigram table: current 1 character -> next character
+- trigram table: current 2 characters -> next character
+- 10-character context: current 10 characters -> next character
+
+The number of possible contexts grows explosively. A literal lookup table for
+long contexts becomes huge, sparse, and hard to estimate well.
+
+A neural net gives a more flexible path:
+
+- replace one-hot inputs with embeddings
+- look at multiple previous characters, not just one
+- add hidden layers
+- learn shared structure instead of memorizing each context separately
+
+So in this lecture, the neural bigram model is important mainly as a bridge:
+
+```text
+same task
+-> same basic loss
+-> same next-character prediction goal
+-> but now in a differentiable form that can be extended
+```
+
+That differentiable form is what makes later models possible, including
+multi-character MLPs, recurrent models, and transformers.
+
+## Two Notes from the Lecture
+
+### 1. One-hot encoding is really a row lookup
+
+Once the current character is one-hot encoded, multiplying by the weight matrix
+does something very simple:
+
+```text
+xenc @ W
+```
+
+selects the row of `W` that corresponds to the current character.
+
+This is exactly the same role that the count matrix played earlier:
+
+- current character index
+- look up the corresponding row
+- get scores or probabilities for the next character
+
+So the neural version is not doing something conceptually different here. It is
+recreating the same lookup-table behavior in a differentiable form.
+
+The difference is:
+
+- in the count model, the table was filled by counting
+- in the neural model, `W` starts random and gradients push it toward useful
+  values
+
+### 2. Smoothing in the count model matches regularization in the neural model
+
+In the count model, we smoothed the probabilities by adding fake counts:
+
+```text
+larger fake counts -> smoother distribution
+very large fake counts -> nearly uniform distribution
+```
+
+In the neural model, something similar happens if we encourage the weights in
+`W` to stay near zero.
+
+If all entries of `W` were exactly `0`, then:
+
+- all logits would be `0`
+- `exp(0) = 1`, so all rows would become all ones
+- after normalization, every row would become a uniform distribution
+
+So pushing `W` toward zero makes the neural model smoother, just like adding
+fake counts makes the count-based model smoother.
+
+This is why adding a regularization term such as:
+
+```text
+(W**2).mean()
+```
+
+to the loss plays a role similar to smoothing. It discourages very large
+weights, keeps the model less peaky, and pushes it slightly toward more uniform
+probabilities.
 
 ## What Was Built
 
