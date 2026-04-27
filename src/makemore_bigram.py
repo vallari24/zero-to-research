@@ -86,6 +86,14 @@ def iter_bigrams(words: Iterable[str]) -> Iterable[tuple[str, str]]:
         yield from zip(chars, chars[1:])
 
 
+def iter_trigrams(words: Iterable[str]) -> Iterable[tuple[str, str, str]]:
+    """Yield trigram transitions with two boundary tokens of context."""
+
+    for word in words:
+        chars = [BOUNDARY_TOKEN, BOUNDARY_TOKEN, *word, BOUNDARY_TOKEN]
+        yield from zip(chars, chars[1:], chars[2:])
+
+
 def count_bigram_matrix(
     words: Sequence[str],
     vocab: BigramVocab,
@@ -105,6 +113,25 @@ def count_bigram_matrix(
     return counts, probs
 
 
+def count_trigram_tensor(
+    words: Sequence[str],
+    vocab: BigramVocab,
+    smoothing: float = 1.0,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return trigram counts and conditional probabilities."""
+
+    if smoothing < 0:
+        raise ValueError("smoothing must be non-negative")
+
+    counts = torch.zeros((vocab.size, vocab.size, vocab.size), dtype=torch.float32)
+    for ch1, ch2, ch3 in iter_trigrams(words):
+        counts[vocab.stoi[ch1], vocab.stoi[ch2], vocab.stoi[ch3]] += 1
+
+    counts = counts + smoothing
+    probs = counts / counts.sum(dim=2, keepdim=True)
+    return counts, probs
+
+
 def build_bigram_dataset(
     words: Sequence[str],
     vocab: BigramVocab,
@@ -117,6 +144,26 @@ def build_bigram_dataset(
         xs.append(vocab.stoi[ch1])
         ys.append(vocab.stoi[ch2])
     return torch.tensor(xs, dtype=torch.long), torch.tensor(ys, dtype=torch.long)
+
+
+def build_trigram_dataset(
+    words: Sequence[str],
+    vocab: BigramVocab,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Convert trigram transitions into integer-index training triples."""
+
+    x1s: list[int] = []
+    x2s: list[int] = []
+    ys: list[int] = []
+    for ch1, ch2, ch3 in iter_trigrams(words):
+        x1s.append(vocab.stoi[ch1])
+        x2s.append(vocab.stoi[ch2])
+        ys.append(vocab.stoi[ch3])
+    return (
+        torch.tensor(x1s, dtype=torch.long),
+        torch.tensor(x2s, dtype=torch.long),
+        torch.tensor(ys, dtype=torch.long),
+    )
 
 
 def average_negative_log_likelihood(
@@ -135,6 +182,24 @@ def average_negative_log_likelihood(
         total_pairs += 1
 
     return -total_log_prob / total_pairs
+
+
+def average_trigram_negative_log_likelihood(
+    words: Sequence[str],
+    probs: torch.Tensor,
+    vocab: BigramVocab,
+) -> float:
+    """Compute average trigram NLL in natural-log units."""
+
+    total_log_prob = 0.0
+    total_triples = 0
+
+    for ch1, ch2, ch3 in iter_trigrams(words):
+        prob = probs[vocab.stoi[ch1], vocab.stoi[ch2], vocab.stoi[ch3]].clamp_min(1e-12)
+        total_log_prob += torch.log(prob).item()
+        total_triples += 1
+
+    return -total_log_prob / total_triples
 
 
 def sample_from_prob_matrix(
@@ -162,6 +227,39 @@ def sample_from_prob_matrix(
             if idx == vocab.stoi[BOUNDARY_TOKEN]:
                 break
             out.append(vocab.itos[idx])
+
+        samples.append("".join(out))
+
+    return samples
+
+
+def sample_from_trigram_tensor(
+    probs: torch.Tensor,
+    vocab: BigramVocab,
+    num_samples: int = 20,
+    seed: int = 2147483647,
+) -> list[str]:
+    """Sample words from a trigram model with two-character context."""
+
+    generator = torch.Generator().manual_seed(seed)
+    samples: list[str] = []
+
+    for _ in range(num_samples):
+        out: list[str] = []
+        idx1 = vocab.stoi[BOUNDARY_TOKEN]
+        idx2 = vocab.stoi[BOUNDARY_TOKEN]
+
+        while True:
+            idx3 = torch.multinomial(
+                probs[idx1, idx2],
+                num_samples=1,
+                replacement=True,
+                generator=generator,
+            ).item()
+            if idx3 == vocab.stoi[BOUNDARY_TOKEN]:
+                break
+            out.append(vocab.itos[idx3])
+            idx1, idx2 = idx2, idx3
 
         samples.append("".join(out))
 
