@@ -23,6 +23,7 @@ judgment, and technical writing.
 - `src/`: helper code factored out of notebooks
 - `data/`: local datasets and generated artifacts
 - `docs/02_makemore_bigrams_notes.md`: lecture 2 short bigram note
+- `docs/04_makemore_mlp_notes.md`: part 2 note on why count tables do not scale to longer context
 - `docs/03_pytorch_basics.md`: short PyTorch basics note
 
 ## Quick start

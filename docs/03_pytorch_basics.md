@@ -15,6 +15,281 @@ a higher-dimensional array.
 `shape` tells you the size along each axis. For example, `(28, 28)` means a
 2D tensor with 28 rows and 28 columns.
 
+## Tensor Internals: Data and Metadata
+
+One useful mental model from ezyang's PyTorch internals writeup is:
+
+```text
+tensor = data + metadata
+```
+
+The data is the actual block of numbers in memory.
+
+The metadata tells PyTorch how to interpret those numbers. The most important
+pieces are:
+
+- `shape`: how many elements live along each dimension
+- `stride`: how far PyTorch must jump in memory when you move by `1` along a dimension
+- `storage offset`: where this tensor's logical view starts inside the underlying storage
+
+So two tensors can share the same underlying data but interpret it differently.
+That is the basic idea behind views.
+
+## Stride
+
+`stride` tells PyTorch how to translate a logical index like `x[i, j]` into a
+location in memory.
+
+Example:
+
+```python
+x = torch.tensor([[1, 2, 3],
+                  [4, 5, 6]])
+
+print(x.shape)   # torch.Size([2, 3])
+print(x.stride())  # (3, 1)
+```
+
+Why is the stride `(3, 1)`?
+
+- stride `3` on `dim=0` means: if you move down by one row, jump over `3` elements
+- stride `1` on `dim=1` means: if you move right by one column, jump over `1` element
+
+If we imagine the underlying storage as:
+
+```text
+[1, 2, 3, 4, 5, 6]
+```
+
+then:
+
+```text
+x[0, 0] -> offset 0*3 + 0*1 = 0 -> 1
+x[0, 2] -> offset 0*3 + 2*1 = 2 -> 3
+x[1, 0] -> offset 1*3 + 0*1 = 3 -> 4
+x[1, 2] -> offset 1*3 + 2*1 = 5 -> 6
+```
+
+That is the basic indexing rule:
+
+```text
+physical offset = sum(index_d * stride_d)
+```
+
+This is why strides matter: PyTorch can keep the same underlying data, but
+change the metadata to create different logical views.
+
+## Views
+
+A view is a tensor that shares the same underlying data with another tensor,
+but may have different metadata such as shape, stride, or offset.
+
+Row slice example:
+
+```python
+x = torch.tensor([[1, 2, 3],
+                  [4, 5, 6]])
+
+row = x[1, :]
+print(row)         # tensor([4, 5, 6])
+print(row.shape)   # torch.Size([3])
+print(row.stride())  # (1,)
+```
+
+This does not need new data. PyTorch can represent it as:
+
+- same underlying storage
+- new offset starting at the `4`
+- shape `[3]`
+- stride `(1,)`
+
+Column slice example:
+
+```python
+col = x[:, 0]
+print(col)          # tensor([1, 4])
+print(col.shape)    # torch.Size([2])
+print(col.stride()) # (3,)
+```
+
+Here the elements are not adjacent in memory. They live at positions `0` and
+`3` in the underlying storage:
+
+```text
+[1, 2, 3, 4, 5, 6]
+```
+
+So PyTorch represents the column view using stride `(3,)`: every step forward
+in the logical tensor jumps `3` elements in storage.
+
+## view and reshape
+
+`view` changes the shape without changing the underlying data. This only works
+when the new shape is compatible with the existing size and stride.
+
+Example:
+
+```python
+x = torch.tensor([[1, 2, 3],
+                  [4, 5, 6]])
+
+y = x.view(6)
+print(y)         # tensor([1, 2, 3, 4, 5, 6])
+print(y.shape)   # torch.Size([6])
+```
+
+This works because `x` is contiguous, so PyTorch can reinterpret the same data
+as one flat vector.
+
+A useful pattern is:
+
+```python
+x.view(x.shape[0], -1)
+```
+
+Example:
+
+```python
+emb = torch.tensor([
+    [[1, 10], [2, 20], [3, 30]],
+    [[4, 40], [5, 50], [6, 60]],
+])
+
+print(emb.shape)  # torch.Size([2, 3, 2])
+flat = emb.view(emb.shape[0], -1)
+print(flat)
+print(flat.shape)  # torch.Size([2, 6])
+```
+
+Result:
+
+```python
+tensor([[ 1, 10,  2, 20,  3, 30],
+        [ 4, 40,  5, 50,  6, 60]])
+```
+
+Here:
+
+- `emb.shape[0]` keeps the batch dimension, `2`
+- `-1` means: infer the remaining size automatically
+- since each example has `3 * 2 = 6` numbers, the result is `[2, 6]`
+
+Important detail:
+
+- `view` needs stride-compatible data
+- if the tensor is not laid out appropriately, `view` may fail
+- `reshape` is often safer because it returns a view when possible and copies when necessary
+
+For example:
+
+```python
+x = torch.tensor([[1, 2, 3],
+                  [4, 5, 6]])
+
+xt = x.t()
+print(xt.shape)    # torch.Size([3, 2])
+print(xt.stride()) # not the same as a contiguous [3, 2] tensor
+```
+
+`xt` is a transposed view with different strides. It has the same numbers, but
+they are being interpreted differently.
+
+## torch.cat
+
+`torch.cat` concatenates tensors along an existing dimension.
+
+Example:
+
+```python
+a = torch.tensor([[1, 2],
+                  [3, 4]])
+
+b = torch.tensor([[5, 6],
+                  [7, 8]])
+```
+
+Concatenate along `dim=0`:
+
+```python
+torch.cat([a, b], dim=0)
+```
+
+Result:
+
+```python
+tensor([[1, 2],
+        [3, 4],
+        [5, 6],
+        [7, 8]])
+```
+
+Shape change:
+
+```text
+[2, 2] + [2, 2] -> [4, 2]
+```
+
+Concatenate along `dim=1`:
+
+```python
+torch.cat([a, b], dim=1)
+```
+
+Result:
+
+```python
+tensor([[1, 2, 5, 6],
+        [3, 4, 7, 8]])
+```
+
+Shape change:
+
+```text
+[2, 2] + [2, 2] -> [2, 4]
+```
+
+Rule:
+
+- all tensors must match in every dimension except the concatenation dimension
+
+In makemore-style embedding code, this is what happens when you manually
+flatten context embeddings:
+
+```python
+emb = torch.tensor([
+    [[1, 10], [2, 20], [3, 30]],
+    [[4, 40], [5, 50], [6, 60]],
+])
+
+torch.cat([emb[:, 0, :], emb[:, 1, :], emb[:, 2, :]], dim=1)
+```
+
+Each slice:
+
+- `emb[:, 0, :]` has shape `[2, 2]`
+- `emb[:, 1, :]` has shape `[2, 2]`
+- `emb[:, 2, :]` has shape `[2, 2]`
+
+Concatenating along `dim=1` gives:
+
+```python
+tensor([[ 1, 10,  2, 20,  3, 30],
+        [ 4, 40,  5, 50,  6, 60]])
+```
+
+Shape:
+
+```text
+[2, 6]
+```
+
+So `torch.cat` is a manual way to combine multiple tensor blocks side by side.
+
+Compare:
+
+- `torch.cat(..., dim=1)` explicitly stitches tensors together
+- `view(...)` reinterprets one compatible tensor with a new shape
+
 ## Datatype
 
 `dtype` tells you what kind of numbers the tensor stores, such as
