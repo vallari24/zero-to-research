@@ -545,6 +545,56 @@ That means:
 
 So every character id gets mapped to a 2-dimensional vector.
 
+#### Visualizing the 2D embeddings
+
+Because this toy model uses a 2-dimensional embedding, we can draw the learned
+character vectors directly as points.
+
+This plot is read after training, once the loss has been minimized. At that
+point, `C` is no longer a random table. Backprop has moved each character vector
+to a position that helps the MLP predict the next character.
+
+A simplified version of the embedding plot looks like this:
+
+```text
+                    learned embedding space
+
+        rare / unusual region
+                  q
+
+
+    boundary region                         consonants spread out
+          .                              b   g   k   m   t
+                                            r   s   n   l
+
+
+        vowel-like region
+        a   e   i   o   u
+```
+
+How to read the plot:
+
+- each dot is one row of the embedding table `C`
+- the x- and y-axes are learned coordinates, not hand-designed features
+- nearby characters are characters the model has learned to use similarly
+- far-apart characters are characters the model treats differently
+
+The vowel cluster is the easiest pattern to interpret. Characters like `a`,
+`e`, `i`, `o`, and `u` often appear in similar positions inside names, so their
+gradients tend to push them into a similar part of the space.
+
+`q` often ends up far away because it is rare and has a very specific behavior.
+In names, it usually strongly constrains what can come next, especially toward
+`u`, so the model benefits from giving it a distinctive embedding.
+
+The `.` token is also special. It is not a letter; it marks both the beginning
+and the end of a name. Because its job is structurally different from ordinary
+characters, training often pushes it into its own region of the plot.
+
+The exact coordinates do not matter. The important signal is the geometry:
+training has arranged the characters so that similar roles are close together
+and special cases are pushed apart.
+
 ### 4. What `C[X]` does
 
 PyTorch lets us index tensors in a very convenient way.
@@ -1538,3 +1588,853 @@ car
 
 So sampling is just the training-time prediction rule used repeatedly in a
 loop, feeding each new sampled character back into the context.
+
+## Part 2 Exercises and Optimization Notes
+
+These exercises use the same basic character-level MLP, but now the goal is to
+build optimization judgment:
+
+```text
+how do we know what to tune,
+which changes helped,
+which changes only memorized the train set,
+and what should we try next?
+```
+
+The experiments below used:
+
+- dataset: `data/names.txt`
+- split: `80%` train, `10%` validation/dev, `10%` test
+- metric: average negative log likelihood, so lower is better
+- implementation: `scripts/makemore_part2_exercises.py`
+
+The validation set is the main model-selection split. The test set should be
+read as the final held-out check after choosing from validation.
+
+### E01. Tune Hyperparameters to Beat Validation Loss 2.2
+
+The target from the lecture was to beat a validation loss of about:
+
+```text
+2.2
+```
+
+The first tuned baseline already beat that target:
+
+```text
+validation loss = 2.1236
+```
+
+Then the rest of the exercise was about understanding which knobs improved
+validation loss and which ones only improved training loss.
+
+#### Step 1. Start from a sane baseline
+
+Baseline configuration:
+
+```text
+block_size = 3
+embedding size = 10
+hidden size = 200
+parameters = 11897
+```
+
+Results:
+
+| model | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| baseline careful init | `2.0766` | `2.1236` | `2.1184` |
+
+This is already below `2.2`.
+
+The train and validation losses are close:
+
+```text
+train = 2.0766
+validation = 2.1236
+gap = 0.0470
+```
+
+That means the model is not badly overfitting. It is still limited enough that
+it cannot perfectly memorize the training set.
+
+The useful diagnosis is:
+
+```text
+mostly healthy, maybe still under-capacity
+```
+
+So it is reasonable to try a larger hidden layer or a richer embedding.
+
+#### Step 2. Increase hidden width
+
+Change:
+
+```text
+hidden size: 200 -> 300
+```
+
+Results:
+
+| model | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| hidden 200 | `2.0766` | `2.1236` | `2.1184` |
+| hidden 300 | `2.0536` | `2.1083` | `2.1060` |
+
+This worked.
+
+Why it helped:
+
+- the model had more hidden units
+- the training loss went down
+- the validation loss also went down
+
+That is the good kind of capacity increase.
+
+If only train loss had improved, that would suggest memorization. But because
+validation improved too, the model was using the extra capacity to learn real
+structure.
+
+#### Step 3. Increase embedding size
+
+Change:
+
+```text
+embedding size: 10 -> 16
+hidden size: 300
+block_size: 3
+```
+
+Results:
+
+| model | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| embed 10, hidden 300 | `2.0536` | `2.1083` | `2.1060` |
+| embed 16, hidden 300 | `2.0360` | `2.0957` | `2.0921` |
+
+This also worked.
+
+Why it helped:
+
+The embedding table `C` gives each character a vector. With only a few
+embedding dimensions, the model has to compress all useful character properties
+into a small space.
+
+Increasing embedding size gives the model more room to represent character
+roles:
+
+```text
+vowel-like behavior
+rare-character behavior
+start/end behavior
+common consonant behavior
+```
+
+Again, both train and validation loss improved, so this was not just
+memorization.
+
+#### Step 4. Increase context length
+
+This was the biggest improvement.
+
+Instead of predicting from the previous 3 characters, try more previous
+characters:
+
+```text
+block_size = 4
+block_size = 5
+block_size = 8
+```
+
+Results:
+
+| model | block_size | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: | ---: |
+| b3 e16 h300 | 3 | `2.0360` | `2.0957` | `2.0921` |
+| b4 e12 h300 | 4 | `1.9619` | `2.0602` | `2.0508` |
+| b5 e12 h300 | 5 | `1.9312` | `2.0464` | `2.0373` |
+| b8 e12 h300 | 8 | `1.9064` | `2.0411` | `2.0383` |
+
+This worked strongly.
+
+Why context helped:
+
+Names have local structure longer than 3 characters. For example, after seeing:
+
+```text
+...ch
+...shi
+...ella
+...ann
+```
+
+the model has more information about what characters are plausible next.
+
+A short context asks the model to predict from incomplete evidence. Increasing
+context gives the model more of the spelling pattern.
+
+This is the most important intuition from E01:
+
+```text
+more capacity helps,
+but better input information helps more
+```
+
+#### Step 5. Increase model size around the best context
+
+Since `block_size = 8` helped, the next test was:
+
+```text
+block_size = 8
+embedding size = 16
+hidden size = 400
+```
+
+Results:
+
+| model | parameters | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: | ---: |
+| b8 e12 h300 | `37551` | `1.9064` | `2.0411` | `2.0383` |
+| b8 e16 h400 | `62859` | `1.8015` | `2.0325` | `2.0181` |
+
+This worked.
+
+The train loss dropped a lot, and validation/test also improved.
+
+The model is starting to overfit more:
+
+```text
+train = 1.8015
+validation = 2.0325
+gap = 0.2310
+```
+
+But because validation improved, the extra capacity was still useful.
+
+Diagnosis:
+
+```text
+mild-to-moderate overfitting, but best validation result
+```
+
+#### Step 6. Push hidden size further
+
+Change:
+
+```text
+hidden size: 400 -> 500
+```
+
+Results:
+
+| model | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| b8 e16 h400 | `1.8015` | `2.0325` | `2.0181` |
+| b8 e16 h500 | `1.7711` | `2.0340` | `2.0210` |
+
+This was a net negative.
+
+Why:
+
+- train loss improved
+- validation loss got slightly worse
+- test loss got slightly worse
+
+That is the classic signal that capacity is no longer the main bottleneck. The
+larger model is better at fitting the training set, but not better at
+generalizing.
+
+Diagnosis:
+
+```text
+more overfit, no validation gain
+```
+
+#### Step 7. Increase batch size without retuning learning rate
+
+Change:
+
+```text
+batch size: 64 -> 128
+same learning-rate schedule
+```
+
+Results:
+
+| model | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| b8 e16 h400, batch 64 | `1.8015` | `2.0325` | `2.0181` |
+| b8 e16 h400, batch 128 | `1.7771` | `2.0433` | `2.0296` |
+
+This was also a net negative.
+
+Why:
+
+A larger batch gives a less noisy gradient estimate. That can be good, but it
+also changes the effective optimization behavior. With the same learning-rate
+schedule, it did not improve validation loss here.
+
+The important lesson:
+
+```text
+batch size is not an isolated knob
+```
+
+If batch size changes, the learning rate schedule may also need to change.
+
+#### E01 Summary
+
+Best result:
+
+| best model | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| b8 e16 h400 | `1.8015` | `2.0325` | `2.0181` |
+
+What worked:
+
+- careful initialization
+- wider hidden layer up to a point
+- larger embeddings
+- longer context
+- moderate extra capacity after increasing context
+
+What did not work:
+
+- hidden size `500` after `400`
+- batch size `128` with the same learning-rate schedule
+
+Main intuition:
+
+```text
+first improve the information the model sees,
+then add enough capacity to use that information,
+then stop when validation no longer improves
+```
+
+### E02. Initialization
+
+Initialization means the model's parameter values before training starts.
+
+In this MLP, the trainable parameters are:
+
+```text
+C   = embedding table
+W1  = first-layer weights
+b1  = first-layer bias
+W2  = output-layer weights
+b2  = output-layer bias
+```
+
+The forward pass is:
+
+```text
+characters
+-> embedding lookup
+-> hidden layer
+-> logits
+-> softmax probabilities
+-> loss
+```
+
+The key object is the logits.
+
+Logits are raw scores before softmax. Softmax turns them into probabilities.
+
+For a tiny 4-class example:
+
+```text
+logits  = [0, 0, 0, 0]
+softmax = [0.25, 0.25, 0.25, 0.25]
+```
+
+That is a calm model. It is saying:
+
+```text
+I do not know yet
+```
+
+But if logits are large and random:
+
+```text
+logits  = [18, -4, 2, 9]
+softmax = [almost 1, tiny, tiny, tiny]
+```
+
+Now the model is extremely confident in one random answer.
+
+At initialization, that confidence is fake. The model has not learned anything
+yet.
+
+#### What loss should we expect at initialization?
+
+There are 27 possible next characters:
+
+```text
+.abcdefghijklmnopqrstuvwxyz
+```
+
+At initialization, the model should have no reason to strongly prefer any one
+character. So the ideal initial prediction is approximately uniform:
+
+```text
+probability of each character = 1 / 27
+```
+
+The loss for the correct character is:
+
+```text
+-log(probability of correct character)
+```
+
+So the expected uniform loss is:
+
+```text
+-log(1 / 27) = log(27) = 3.2958
+```
+
+This does not mean the model is good. It means the model is honestly uncertain.
+
+#### What happened with careless initialization?
+
+Results:
+
+| initialization | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| careless lecture-style | `26.0047` | `26.0105` | `26.0153` |
+
+This is very bad.
+
+A loss around `26` means the model is assigning almost zero probability to the
+correct next character for many examples.
+
+That happens because:
+
+```text
+large random W2 and b2
+-> large random logits
+-> softmax becomes extremely confident
+-> confidence is usually on the wrong class
+-> loss becomes huge
+```
+
+This is why bad initialization can make the early loss misleading.
+
+The first part of training is not really learning name structure. It is mostly
+undoing the bad scale of the logits.
+
+That is what this means:
+
+```text
+if initialization is bad, early loss is dominated by broken logits,
+not model quality
+```
+
+If a model starts at loss `26`, the early decrease from `26` to `4` is not a
+meaningful language-modeling improvement. It is the optimizer repairing a bad
+starting scale.
+
+#### Fix 1. Make the output layer small
+
+Change:
+
+```text
+W2 = small random numbers
+b2 = zeros
+```
+
+Results:
+
+| initialization | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| small output layer | `3.3079` | `3.3076` | `3.3078` |
+
+This is close to:
+
+```text
+log(27) = 3.2958
+```
+
+Why it works:
+
+The output logits are computed as:
+
+```text
+logits = h @ W2 + b2
+```
+
+If `W2` is small and `b2` is zero, then logits start near zero:
+
+```text
+logits ≈ [0, 0, 0, ..., 0]
+```
+
+Then softmax is near-uniform:
+
+```text
+probabilities ≈ [1/27, 1/27, ..., 1/27]
+```
+
+So the starting loss is close to the expected random baseline.
+
+#### Fix 2. Also scale the hidden layer
+
+Change:
+
+```text
+W1 scale ≈ (5 / 3) / sqrt(fan_in)
+b1 = small values
+W2 = small random numbers
+b2 = zeros
+```
+
+Results:
+
+| initialization | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| careful output + tanh scaling | `3.3082` | `3.3080` | `3.3081` |
+
+This starts at roughly the same loss as the small-output-layer fix. The main
+benefit is not only the initial loss. It also keeps hidden activations healthier.
+
+The hidden layer is:
+
+```text
+h = tanh(emb @ W1 + b1)
+```
+
+If `W1` is too large, then `emb @ W1 + b1` has very large positive and negative
+values.
+
+Then `tanh` saturates:
+
+```text
+large positive -> tanh ≈ 1
+large negative -> tanh ≈ -1
+```
+
+That is bad because the gradient of `tanh` is very small near `-1` and `1`.
+So learning signal gets blocked.
+
+The hidden-layer scaling keeps the pre-activations closer to a useful range.
+
+The intuition:
+
+```text
+W2 small -> do not start confidently wrong
+W1 scaled -> do not saturate tanh
+```
+
+#### E02 Summary
+
+| initialization | train loss | validation loss | test loss | interpretation |
+| --- | ---: | ---: | ---: | --- |
+| careless | `26.0047` | `26.0105` | `26.0153` | confidently wrong |
+| small output layer | `3.3079` | `3.3076` | `3.3078` | near-uniform logits |
+| careful output + tanh scaling | `3.3082` | `3.3080` | `3.3081` | near-uniform logits and healthier hidden layer |
+
+Good initialization does not make the trained model magically better by itself.
+It makes the optimization problem cleaner.
+
+The model starts from:
+
+```text
+humbly uncertain
+```
+
+instead of:
+
+```text
+loudly wrong
+```
+
+That gives the optimizer a better first job:
+
+```text
+learn name structure
+```
+
+instead of:
+
+```text
+repair broken parameter scale
+```
+
+### E03. Try Ideas From Bengio et al. 2003
+
+Bengio et al. propose the basic idea used in this makemore model:
+
+```text
+token id
+-> learned vector from C
+-> concatenate context vectors
+-> neural network
+-> probability distribution over next token
+```
+
+The paper also suggests several ideas worth trying:
+
+- longer context
+- regularization
+- optional direct input-to-output connections
+- mixture with an interpolated n-gram model
+
+I tried two paper-inspired ideas:
+
+1. direct input-to-output connections
+2. a mixture of neural predictions and a trigram model
+
+#### Idea 1. Direct input-to-output connection
+
+The normal makemore MLP computes:
+
+```text
+flat embeddings -> hidden tanh layer -> logits
+```
+
+The Bengio-style direct connection adds a shortcut:
+
+```text
+flat embeddings -----------------------> logits
+flat embeddings -> hidden tanh layer --> logits
+```
+
+So the logits get two sources of information:
+
+```text
+logits = hidden_path + direct_path
+```
+
+Results:
+
+| model | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| b5 e12 h300 baseline | `1.9312` | `2.0464` | `2.0373` |
+| b5 e12 h300 direct path | `1.9321` | `2.0463` | `2.0359` |
+
+This was mostly neutral.
+
+Why it might help:
+
+The direct path can learn simple linear effects directly from the context
+embeddings. That leaves the hidden layer free to model more nonlinear
+interactions.
+
+For example, a direct path can cheaply learn:
+
+```text
+if the recent context contains q, boost u
+if the recent context ends in a, boost n or .
+```
+
+Why it did not help much here:
+
+The vocabulary is tiny, only 27 characters, and the hidden layer was already
+large enough to learn many of these simple effects. So the shortcut did not add
+much new useful capacity.
+
+Diagnosis:
+
+```text
+not harmful, but not a major win by itself
+```
+
+#### Idea 2. Mixture with a trigram model
+
+Bengio et al. also discuss combining the neural model with an interpolated
+trigram model.
+
+That suggests this mixture:
+
+```text
+final probability =
+    85% neural MLP probability
+  + 15% trigram probability
+```
+
+The `15%` trigram weight was selected on the validation set.
+
+Results:
+
+| model | train loss | validation loss | test loss |
+| --- | ---: | ---: | ---: |
+| direct neural model | `1.9321` | `2.0463` | `2.0359` |
+| direct neural + trigram mixture | `1.9362` | `2.0332` | `2.0261` |
+
+This worked.
+
+The train loss got slightly worse:
+
+```text
+1.9321 -> 1.9362
+```
+
+But validation and test improved:
+
+```text
+validation: 2.0463 -> 2.0332
+test:       2.0359 -> 2.0261
+```
+
+That is a good tradeoff. We care more about held-out loss than training loss.
+
+Why the mixture helped:
+
+The neural model is good at generalization:
+
+```text
+similar contexts -> similar embeddings -> similar predictions
+```
+
+The trigram model is good at exact local evidence:
+
+```text
+if this exact two-character context was common in training,
+its empirical next-character distribution can be very useful
+```
+
+The mixture combines both:
+
+```text
+neural model = smoother, more general
+trigram model = sharper, more local
+```
+
+A small trigram weight helped because it corrected the neural model in cases
+where exact short-context counts were reliable.
+
+Too much trigram weight hurt. At `100%` trigram, validation loss was about:
+
+```text
+2.2225
+```
+
+That is worse than the neural model, because the trigram model is sparse and
+cannot generalize as well.
+
+The best result came from a small amount of trigram information:
+
+```text
+alpha_trigram = 0.15
+```
+
+#### E03 Summary
+
+| idea | train loss | validation loss | test loss | outcome |
+| --- | ---: | ---: | ---: | --- |
+| direct path | `1.9321` | `2.0463` | `2.0359` | neutral |
+| direct path + trigram mixture | `1.9362` | `2.0332` | `2.0261` | worked |
+
+The mixture result is an important optimization lesson:
+
+```text
+lower training loss is not always the best model
+```
+
+The mixture slightly worsened train loss but improved validation and test loss.
+That means it generalized better.
+
+### How to Approach Optimization
+
+The practical optimization loop from these exercises is:
+
+1. Check the expected initial loss.
+2. Fix initialization if the starting loss is far above `log(vocab_size)`.
+3. Establish a baseline train/dev/test result.
+4. If train and validation are both high and close, try more capacity.
+5. If extra capacity helps both train and validation, keep it.
+6. If train improves but validation worsens, stop increasing that knob.
+7. Try giving the model better input information, such as longer context.
+8. Use validation to choose hyperparameters.
+9. Use test only as a final held-out check.
+
+The most useful diagnostic is the train-validation gap.
+
+#### Underfitting pattern
+
+```text
+train loss high
+validation loss high
+gap small
+```
+
+Interpretation:
+
+```text
+the model is not powerful enough,
+or the input does not contain enough information,
+or training has not run long enough
+```
+
+Try:
+
+- larger hidden layer
+- larger embedding size
+- longer context
+- better learning-rate schedule
+- train longer
+
+#### Overfitting pattern
+
+```text
+train loss keeps improving
+validation loss stops improving or gets worse
+gap grows
+```
+
+Interpretation:
+
+```text
+the model is memorizing training-specific patterns
+```
+
+Try:
+
+- smaller model
+- weight decay
+- less training
+- more data
+- dropout or other regularization in larger models
+- choose the earlier or smaller model with better validation loss
+
+#### Good optimization pattern
+
+```text
+train loss improves
+validation loss improves
+test loss later confirms the improvement
+```
+
+This is what happened for:
+
+- hidden `200 -> 300`
+- embedding `10 -> 16`
+- context `3 -> 4 -> 5 -> 8`
+- b8 e16 h400
+- neural + trigram mixture
+
+The broad lesson is:
+
+```text
+do not optimize by making the model bigger blindly
+```
+
+A better order is:
+
+```text
+make optimization stable
+-> improve the information available to the model
+-> add enough capacity to use that information
+-> stop when validation stops improving
+```
+
+### Reference Points
+
+The external reference points that helped interpret these runs:
+
+- Karpathy's original Part 2 notebook gives a validation loss around `2.17` for
+  the starter MLP setup.
+- Part 3 initialization notes explain why the ideal initial loss is
+  `log(27) = 3.2958` and why very large random logits create a fake high loss.
+- Bengio et al. 2003 motivates distributed embeddings, longer contexts, direct
+  connections, regularization, and mixing neural predictions with n-gram
+  predictions.
