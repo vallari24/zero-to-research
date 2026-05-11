@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 500" role="img" aria-labelledby="title desc">
+  <title id="title">Shape grammar for a rank-3 tensor</title>
+  <desc id="desc">A visual guide showing a tensor with shape B by T by E, where B is examples, T is context positions, and E is embedding features.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #5f6b7a; }
+      .axisB { fill: #2563eb; }
+      .axisT { fill: #059669; }
+      .axisE { fill: #d97706; }
+      .panel { fill: #ffffff; stroke: #d6d9de; stroke-width: 1.5; }
+      .cell { fill: #eef2ff; stroke: #8ea2d8; stroke-width: 1.2; }
+      .cell2 { fill: #ecfdf5; stroke: #7dc8a2; stroke-width: 1.2; }
+      .feature { fill: #fff7ed; stroke: #e6a155; stroke-width: 1.2; }
+      .line { stroke: #657386; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#657386"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="920" height="500" rx="18"/>
+  <text x="40" y="48" class="label ink">Read every shape as named axes</text>
+  <text x="40" y="78" class="text muted">Shape numbers are not enough. Attach a meaning to each axis before doing tensor operations.</text>
+
+  <rect x="40" y="120" width="365" height="300" rx="10" class="panel"/>
+  <text x="64" y="155" class="label ink">emb.shape = [B, T, E]</text>
+  <text x="64" y="187" class="text axisB">B = batch examples</text>
+  <text x="64" y="217" class="text axisT">T = context positions</text>
+  <text x="64" y="247" class="text axisE">E = embedding features</text>
+  <text x="64" y="292" class="text ink">Concrete example:</text>
+  <text x="64" y="323" class="text ink">[2, 3, 2]</text>
+  <text x="64" y="354" class="small muted">2 examples</text>
+  <text x="64" y="377" class="small muted">3 characters per example</text>
+  <text x="64" y="400" class="small muted">2 numbers per character</text>
+
+  <rect x="510" y="106" width="310" height="130" rx="8" class="panel"/>
+  <text x="535" y="137" class="text axisB">example 0</text>
+  <rect x="535" y="158" width="68" height="44" rx="5" class="cell"/>
+  <rect x="615" y="158" width="68" height="44" rx="5" class="cell"/>
+  <rect x="695" y="158" width="68" height="44" rx="5" class="cell"/>
+  <text x="551" y="184" class="small ink">pos 0</text>
+  <text x="631" y="184" class="small ink">pos 1</text>
+  <text x="711" y="184" class="small ink">pos 2</text>
+  <rect x="548" y="207" width="20" height="14" rx="2" class="feature"/>
+  <rect x="570" y="207" width="20" height="14" rx="2" class="feature"/>
+  <rect x="628" y="207" width="20" height="14" rx="2" class="feature"/>
+  <rect x="650" y="207" width="20" height="14" rx="2" class="feature"/>
+  <rect x="708" y="207" width="20" height="14" rx="2" class="feature"/>
+  <rect x="730" y="207" width="20" height="14" rx="2" class="feature"/>
+
+  <rect x="545" y="256" width="310" height="130" rx="8" class="panel"/>
+  <text x="570" y="287" class="text axisB">example 1</text>
+  <rect x="570" y="308" width="68" height="44" rx="5" class="cell2"/>
+  <rect x="650" y="308" width="68" height="44" rx="5" class="cell2"/>
+  <rect x="730" y="308" width="68" height="44" rx="5" class="cell2"/>
+  <text x="586" y="334" class="small ink">pos 0</text>
+  <text x="666" y="334" class="small ink">pos 1</text>
+  <text x="746" y="334" class="small ink">pos 2</text>
+  <rect x="583" y="357" width="20" height="14" rx="2" class="feature"/>
+  <rect x="605" y="357" width="20" height="14" rx="2" class="feature"/>
+  <rect x="663" y="357" width="20" height="14" rx="2" class="feature"/>
+  <rect x="685" y="357" width="20" height="14" rx="2" class="feature"/>
+  <rect x="743" y="357" width="20" height="14" rx="2" class="feature"/>
+  <rect x="765" y="357" width="20" height="14" rx="2" class="feature"/>
+
+  <path d="M470 180 C445 180 445 315 505 315" class="line"/>
+  <text x="455" y="244" class="small muted">B axis stacks examples</text>
+  <text x="586" y="455" class="small muted">Inside each example: T boxes. Inside each T box: E feature numbers.</text>
+</svg>

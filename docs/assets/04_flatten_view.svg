@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 500" role="img" aria-labelledby="title desc">
+  <title id="title">Flattening embeddings with view</title>
+  <desc id="desc">A visual explanation of turning a tensor of shape B by T by E into B by T times E by flattening the context and embedding axes.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #ffffff; stroke: #d7dce2; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .cellA { fill: #ecfdf5; stroke: #7dc8a2; stroke-width: 1.2; }
+      .cellB { fill: #fff7ed; stroke: #e6a155; stroke-width: 1.2; }
+      .line { stroke: #66758a; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="980" height="500" rx="18"/>
+  <text x="38" y="48" class="label ink">view/flatten does not learn anything</text>
+  <text x="38" y="78" class="text muted">It only changes how the same numbers are arranged for the next matrix multiply.</text>
+
+  <rect x="42" y="122" width="355" height="280" rx="10" class="panel"/>
+  <text x="68" y="154" class="label green">emb: [B, T, E] = [2,3,2]</text>
+  <text x="68" y="184" class="small muted">two examples; each has three 2-number vectors</text>
+  <g transform="translate(72 220)">
+    <text x="0" y="-12" class="small muted">example 0</text>
+    <rect x="0" y="0" width="58" height="38" rx="5" class="cellA"/>
+    <rect x="66" y="0" width="58" height="38" rx="5" class="cellA"/>
+    <rect x="132" y="0" width="58" height="38" rx="5" class="cellA"/>
+    <text x="13" y="24" class="small ink">1 10</text>
+    <text x="79" y="24" class="small ink">2 20</text>
+    <text x="145" y="24" class="small ink">3 30</text>
+    <text x="0" y="78" class="small muted">example 1</text>
+    <rect x="0" y="92" width="58" height="38" rx="5" class="cellB"/>
+    <rect x="66" y="92" width="58" height="38" rx="5" class="cellB"/>
+    <rect x="132" y="92" width="58" height="38" rx="5" class="cellB"/>
+    <text x="13" y="116" class="small ink">4 40</text>
+    <text x="79" y="116" class="small ink">5 50</text>
+    <text x="145" y="116" class="small ink">6 60</text>
+  </g>
+
+  <path d="M420 260 L556 260" class="line"/>
+  <text x="438" y="232" class="text ink">merge T and E</text>
+  <text x="438" y="285" class="small muted">3 positions * 2 features = 6</text>
+
+  <rect x="580" y="122" width="355" height="280" rx="10" class="panel"/>
+  <text x="606" y="154" class="label orange">flat: [B, T*E] = [2,6]</text>
+  <text x="606" y="184" class="small muted">the batch axis B stays separate</text>
+  <g transform="translate(616 230)">
+    <rect x="0" y="0" width="276" height="38" rx="5" class="cellA"/>
+    <line x1="46" y1="0" x2="46" y2="38" stroke="#7dc8a2"/>
+    <line x1="92" y1="0" x2="92" y2="38" stroke="#7dc8a2"/>
+    <line x1="138" y1="0" x2="138" y2="38" stroke="#7dc8a2"/>
+    <line x1="184" y1="0" x2="184" y2="38" stroke="#7dc8a2"/>
+    <line x1="230" y1="0" x2="230" y2="38" stroke="#7dc8a2"/>
+    <text x="13" y="24" class="small ink">1</text>
+    <text x="54" y="24" class="small ink">10</text>
+    <text x="105" y="24" class="small ink">2</text>
+    <text x="146" y="24" class="small ink">20</text>
+    <text x="197" y="24" class="small ink">3</text>
+    <text x="238" y="24" class="small ink">30</text>
+    <rect x="0" y="62" width="276" height="38" rx="5" class="cellB"/>
+    <line x1="46" y1="62" x2="46" y2="100" stroke="#e6a155"/>
+    <line x1="92" y1="62" x2="92" y2="100" stroke="#e6a155"/>
+    <line x1="138" y1="62" x2="138" y2="100" stroke="#e6a155"/>
+    <line x1="184" y1="62" x2="184" y2="100" stroke="#e6a155"/>
+    <line x1="230" y1="62" x2="230" y2="100" stroke="#e6a155"/>
+    <text x="13" y="86" class="small ink">4</text>
+    <text x="54" y="86" class="small ink">40</text>
+    <text x="105" y="86" class="small ink">5</text>
+    <text x="146" y="86" class="small ink">50</text>
+    <text x="197" y="86" class="small ink">6</text>
+    <text x="238" y="86" class="small ink">60</text>
+  </g>
+  <text x="606" y="366" class="small muted">Rule: total number of scalars must stay the same.</text>
+</svg>

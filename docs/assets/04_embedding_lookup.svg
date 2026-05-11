@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 500" role="img" aria-labelledby="title desc">
+  <title id="title">Embedding lookup C[X]</title>
+  <desc id="desc">A diagram showing X as a grid of character ids, C as an embedding table, and C of X as a rank-3 tensor with an embedding vector at every input position.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #ffffff; stroke: #d7dce2; stroke-width: 1.5; }
+      .id { fill: #eef2ff; stroke: #8ea2d8; stroke-width: 1.2; }
+      .table { fill: #f8fafc; stroke: #aeb8c5; stroke-width: 1; }
+      .rowhi { fill: #fef3c7; stroke: #d97706; stroke-width: 1.2; }
+      .vec { fill: #fff7ed; stroke: #e6a155; stroke-width: 1.2; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .line { stroke: #66758a; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="980" height="500" rx="18"/>
+  <text x="38" y="48" class="label ink">C[X] means: replace every id with its row vector</text>
+  <text x="38" y="78" class="text muted">The shape gains one new axis because each scalar id becomes a length-E vector.</text>
+
+  <rect x="38" y="118" width="230" height="270" rx="10" class="panel"/>
+  <text x="63" y="151" class="label blue">X: [B, T]</text>
+  <text x="63" y="180" class="small muted">B examples, T positions</text>
+  <g transform="translate(63 214)">
+    <rect x="0" y="0" width="52" height="44" rx="5" class="id"/>
+    <rect x="58" y="0" width="52" height="44" rx="5" class="id"/>
+    <rect x="116" y="0" width="52" height="44" rx="5" class="id"/>
+    <text x="20" y="28" class="text ink">0</text>
+    <text x="78" y="28" class="text ink">0</text>
+    <text x="136" y="28" class="text ink">5</text>
+    <rect x="0" y="54" width="52" height="44" rx="5" class="id"/>
+    <rect x="58" y="54" width="52" height="44" rx="5" class="id"/>
+    <rect x="116" y="54" width="52" height="44" rx="5" class="id"/>
+    <text x="20" y="82" class="text ink">0</text>
+    <text x="78" y="82" class="text ink">5</text>
+    <text x="132" y="82" class="text ink">13</text>
+  </g>
+  <text x="63" y="347" class="small muted">each number is a character id</text>
+
+  <rect x="375" y="118" width="230" height="270" rx="10" class="panel"/>
+  <text x="400" y="151" class="label green">C: [V, E]</text>
+  <text x="400" y="180" class="small muted">V chars, E features</text>
+  <g transform="translate(408 208)">
+    <rect x="0" y="0" width="150" height="140" class="table"/>
+    <line x1="48" y1="0" x2="48" y2="140" stroke="#d0d7df"/>
+    <line x1="99" y1="0" x2="99" y2="140" stroke="#d0d7df"/>
+    <line x1="0" y1="28" x2="150" y2="28" stroke="#d0d7df"/>
+    <line x1="0" y1="56" x2="150" y2="56" stroke="#d0d7df"/>
+    <line x1="0" y1="84" x2="150" y2="84" stroke="#d0d7df"/>
+    <line x1="0" y1="112" x2="150" y2="112" stroke="#d0d7df"/>
+    <rect x="0" y="0" width="150" height="28" class="rowhi"/>
+    <rect x="0" y="56" width="150" height="28" class="rowhi"/>
+    <text x="14" y="19" class="small ink">id 0</text>
+    <text x="14" y="75" class="small ink">id 5</text>
+    <text x="8" y="131" class="small muted">...</text>
+    <text x="63" y="19" class="small ink">e0</text>
+    <text x="112" y="19" class="small ink">e1</text>
+  </g>
+  <text x="400" y="372" class="small muted">lookup table of learned vectors</text>
+
+  <path d="M282 253 L360 253" class="line"/>
+  <path d="M618 253 L696 253" class="line"/>
+  <text x="302" y="233" class="small muted">lookup</text>
+
+  <rect x="710" y="118" width="232" height="270" rx="10" class="panel"/>
+  <text x="735" y="151" class="label orange">emb: [B, T, E]</text>
+  <text x="735" y="180" class="small muted">same B,T plus vector axis</text>
+  <g transform="translate(735 212)">
+    <rect x="0" y="0" width="48" height="34" rx="5" class="vec"/>
+    <rect x="53" y="0" width="48" height="34" rx="5" class="vec"/>
+    <rect x="106" y="0" width="48" height="34" rx="5" class="vec"/>
+    <text x="11" y="22" class="small ink">C0</text>
+    <text x="64" y="22" class="small ink">C0</text>
+    <text x="117" y="22" class="small ink">C5</text>
+    <rect x="0" y="48" width="48" height="34" rx="5" class="vec"/>
+    <rect x="53" y="48" width="48" height="34" rx="5" class="vec"/>
+    <rect x="106" y="48" width="48" height="34" rx="5" class="vec"/>
+    <text x="11" y="70" class="small ink">C0</text>
+    <text x="64" y="70" class="small ink">C5</text>
+    <text x="114" y="70" class="small ink">C13</text>
+  </g>
+  <text x="735" y="333" class="small muted">C5 means the full row vector C[5]</text>
+  <text x="735" y="356" class="small muted">a scalar id became E numbers</text>
+</svg>

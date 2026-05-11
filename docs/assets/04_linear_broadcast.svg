@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 500" role="img" aria-labelledby="title desc">
+  <title id="title">Linear layer shapes and broadcasting</title>
+  <desc id="desc">A visual showing flat embeddings matrix times W1 produces hidden activations, and b1 is broadcast across batch rows.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #ffffff; stroke: #d7dce2; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .matA { fill: #eef2ff; stroke: #8ea2d8; stroke-width: 1.2; }
+      .matB { fill: #ecfdf5; stroke: #7dc8a2; stroke-width: 1.2; }
+      .matC { fill: #fff7ed; stroke: #e6a155; stroke-width: 1.2; }
+      .bias { fill: #fee2e2; stroke: #ef8f8f; stroke-width: 1.2; }
+      .line { stroke: #66758a; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="980" height="500" rx="18"/>
+  <text x="38" y="48" class="label ink">Matrix multiply: inner axes must match</text>
+  <text x="38" y="78" class="text muted">The shared 6 disappears; the outside axes become the output shape.</text>
+
+  <rect x="56" y="150" width="210" height="140" rx="8" class="matA"/>
+  <text x="92" y="135" class="label blue">flat [32,6]</text>
+  <text x="82" y="320" class="small muted">32 examples, 6 input features</text>
+  <text x="136" y="224" class="label ink">A</text>
+  <text x="146" y="302" class="small blue">6</text>
+  <text x="36" y="224" class="small blue">32</text>
+
+  <text x="300" y="228" class="label ink">@</text>
+
+  <rect x="350" y="110" width="105" height="220" rx="8" class="matB"/>
+  <text x="325" y="95" class="label green">W1 [6,100]</text>
+  <text x="331" y="360" class="small muted">6 input rows, 100 hidden cols</text>
+  <text x="392" y="224" class="label ink">W</text>
+  <text x="385" y="342" class="small green">100</text>
+  <text x="462" y="224" class="small green">6</text>
+
+  <path d="M490 220 L560 220" class="line"/>
+
+  <rect x="585" y="150" width="235" height="140" rx="8" class="matC"/>
+  <text x="602" y="135" class="label orange">hidden preact [32,100]</text>
+  <text x="630" y="320" class="small muted">one hidden vector per example</text>
+  <text x="695" y="224" class="label ink">A @ W</text>
+  <text x="676" y="302" class="small orange">100</text>
+  <text x="562" y="224" class="small orange">32</text>
+
+  <rect x="585" y="368" width="235" height="40" rx="8" class="bias"/>
+  <text x="618" y="393" class="text ink">b1 [100]</text>
+  <path d="M704 362 L704 298" class="line"/>
+  <text x="835" y="380" class="small muted">broadcast:</text>
+  <text x="835" y="402" class="small muted">same bias row</text>
+  <text x="835" y="424" class="small muted">added to all 32 rows</text>
+
+  <text x="72" y="454" class="text ink">Shape check: [32, 6] @ [6, 100] + [100] -> [32, 100]</text>
+</svg>
