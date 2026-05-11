@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 440" role="img" aria-labelledby="title desc">
+  <title id="title">Signal flow through activations and gradients</title>
+  <desc id="desc">A diagram showing healthy activation flow and gradient flow through a multilayer perceptron.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #fff; stroke: #d7dce2; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .red { fill: #dc2626; }
+      .line { stroke: #66758a; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="980" height="440" rx="18"/>
+  <text x="38" y="48" class="label ink">Healthy training keeps forward and backward signals in range</text>
+  <text x="38" y="78" class="text muted">Too small: signal dies. Too large: signal saturates or explodes.</text>
+
+  <rect x="50" y="130" width="180" height="120" rx="10" class="panel"/>
+  <text x="82" y="165" class="text blue">input</text>
+  <text x="82" y="192" class="small muted">activations</text>
+  <text x="82" y="220" class="small muted">gradients</text>
+  <path d="M235 190 L300 190" class="line"/>
+
+  <rect x="310" y="130" width="180" height="120" rx="10" class="panel"/>
+  <text x="338" y="165" class="text green">hidden layer</text>
+  <text x="338" y="192" class="small muted">tanh / relu</text>
+  <text x="338" y="220" class="small muted">watch saturation</text>
+  <path d="M495 190 L560 190" class="line"/>
+
+  <rect x="570" y="130" width="180" height="120" rx="10" class="panel"/>
+  <text x="618" y="165" class="text orange">logits</text>
+  <text x="618" y="192" class="small muted">raw scores</text>
+  <text x="618" y="220" class="small muted">before softmax</text>
+  <path d="M755 190 L820 190" class="line"/>
+
+  <rect x="830" y="130" width="110" height="120" rx="10" class="panel"/>
+  <text x="860" y="165" class="text red">loss</text>
+  <text x="854" y="192" class="small muted">scalar</text>
+  <text x="846" y="220" class="small muted">gradient source</text>
+
+  <text x="110" y="320" class="text ink">forward pass: activations should stay centered and scaled</text>
+  <text x="110" y="348" class="text ink">backward pass: gradients should stay nonzero and not blow up</text>
+</svg>

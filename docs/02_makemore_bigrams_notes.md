@@ -3,6 +3,14 @@
 A bigram model is a character model that looks at the current character and
 predicts the next one.
 
+The easiest way to understand this note is as a table story:
+
+```text
+current character id
+-> row in a matrix
+-> next-character probabilities
+```
+
 For a name like `emma`, we add a boundary token so the model can learn where a
 name starts and ends:
 
@@ -37,6 +45,17 @@ after a: n is common, . is possible
 
 At first, this is not a neural net. It is just a probability table learned
 from counts.
+
+![Bigram table and row normalization](assets/02_bigram_table.svg)
+
+The two axes matter:
+
+```text
+rows = current character
+columns = next character
+```
+
+The row gets normalized into a probability distribution, so each row sums to 1.
 
 ## Tokens and Vocabulary
 
@@ -287,6 +306,9 @@ one row sum for each of the 27 rows
 ```
 
 This shape broadcasts correctly against `[27, 27]`.
+
+This is easier to picture if you think of the row sums as a column of totals
+that gets copied across each row.
 
 Conceptually, the row sums look like:
 
@@ -583,6 +605,16 @@ are only labels. They do not mean one character is numerically "more" than
 another in a useful way.
 
 So we turn the current character into a one-hot vector.
+
+![One-hot to row lookup](assets/02_onehot_lookup.svg)
+
+The picture to remember is:
+
+```text
+one-hot input
+-> select one row
+-> use that row as scores
+```
 
 Now the representation has one feature per possible token. That is the key
 bridge from NLP objects like characters into the numeric world that a neural
@@ -1234,6 +1266,13 @@ This is exactly the same role that the count matrix played earlier:
 - current character index
 - look up the corresponding row
 - get scores or probabilities for the next character
+
+The only thing that changed is how the table gets filled:
+
+```text
+count model -> fill with observed counts
+neural model -> fill with learned weights
+```
 
 So the neural version is not doing something conceptually different here. It is
 recreating the same lookup-table behavior in a differentiable form.
