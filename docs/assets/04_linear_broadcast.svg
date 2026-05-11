@@ -58,7 +58,7 @@
   <path d="M704 362 L704 298" class="line"/>
   <text x="835" y="380" class="small muted">broadcast:</text>
   <text x="835" y="402" class="small muted">same bias row</text>
-  <text x="835" y="424" class="small muted">added to all 32 rows</text>
+  <text x="835" y="424" class="small muted">for every example</text>
 
   <text x="72" y="454" class="text ink">Shape check:</text>
   <text x="220" y="454" class="text ink">[32, 6] @ [6, 100] + [100] -> [32, 100]</text>

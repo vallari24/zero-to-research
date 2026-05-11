@@ -66,5 +66,6 @@
     <rect x="72" y="55" width="48" height="34" rx="5" class="cell2"/>
     <rect x="130" y="55" width="48" height="34" rx="5" class="cell2"/>
   </g>
-  <text x="745" y="335" class="small muted">B examples, T steps, F features</text>
+  <text x="745" y="324" class="small muted">B examples, T steps</text>
+  <text x="745" y="346" class="small muted">F features</text>
 </svg>

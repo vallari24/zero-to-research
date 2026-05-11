@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 460" role="img" aria-labelledby="title desc">
   <title id="title">One-hot to row lookup</title>
   <desc id="desc">A diagram showing a one-hot vector selecting a row from a weight matrix.</desc>
   <defs>
@@ -21,7 +21,7 @@
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
     </marker>
   </defs>
-  <rect class="bg" width="980" height="420" rx="18"/>
+  <rect class="bg" width="980" height="460" rx="18"/>
   <text x="38" y="48" class="label ink">One-hot plus matrix multiply is row lookup</text>
   <text x="38" y="78" class="text muted">The single 1 chooses one row.</text>
 
@@ -36,7 +36,7 @@
 
   <path d="M300 223 L368 223" class="line"/>
 
-  <rect x="385" y="108" width="230" height="230" rx="10" class="panel"/>
+  <rect x="385" y="108" width="230" height="270" rx="10" class="panel"/>
   <text x="410" y="141" class="text green">W [3,2]</text>
   <g transform="translate(420 178)">
     <rect x="0" y="0" width="120" height="36" rx="6" class="rowhi"/>
@@ -46,7 +46,8 @@
     <text x="12" y="70" class="small ink">row 1</text>
     <text x="12" y="116" class="small ink">row 2</text>
   </g>
-  <text x="410" y="292" class="small muted">highlighted row is selected</text>
+  <text x="410" y="338" class="small muted">highlighted row</text>
+  <text x="410" y="361" class="small muted">is selected</text>
 
   <path d="M622 223 L690 223" class="line"/>
 
