@@ -197,7 +197,7 @@ as three anonymous numbers, read it as:
 meaning:
 
 ```text
-[examples, context positions, embedding features]
+[examples, context positions, embedding learned numbers]
 ```
 
 ![Shape grammar](assets/04_shape_grammar.svg)
@@ -789,7 +789,7 @@ The shape move is:
 ```text
 X:   [B, T]       character ids
 C:   [V, E]       lookup table
-C[X]: [B, T, E]   every id replaced by an E-number vector
+C[X]: [B, T, E]   every id replaced by a vector with E learned numbers
 ```
 
 Here `E` does not mean the character `e`. It means the embedding width: how
