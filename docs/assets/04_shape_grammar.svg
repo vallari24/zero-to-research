@@ -25,7 +25,7 @@
   <rect class="bg" width="920" height="540" rx="18"/>
   <text x="40" y="48" class="label ink">Read every shape as named axes</text>
   <text x="40" y="78" class="text muted">Shape numbers are not enough.</text>
-  <text x="40" y="105" class="text muted">Attach a meaning to each axis before using tensor ops.</text>
+  <text x="40" y="105" class="text muted">Attach meaning before using tensor ops.</text>
 
   <rect x="40" y="145" width="365" height="300" rx="10" class="panel"/>
   <text x="64" y="180" class="label ink">emb.shape = [B, T, E]</text>

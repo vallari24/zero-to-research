@@ -24,13 +24,14 @@
     </marker>
   </defs>
   <rect class="bg" width="980" height="500" rx="18"/>
-  <text x="38" y="48" class="label ink">C[X] means: replace every id with its row vector</text>
-  <text x="38" y="78" class="text muted">A scalar id becomes a length-E vector, so the shape gains one axis.</text>
+  <text x="38" y="48" class="label ink">C[X] is a row lookup</text>
+  <text x="38" y="78" class="text muted">Each id becomes a length-E vector.</text>
+  <text x="38" y="103" class="text muted">The shape gains one axis.</text>
 
-  <rect x="38" y="118" width="230" height="270" rx="10" class="panel"/>
-  <text x="63" y="151" class="label blue">X: [B, T]</text>
-  <text x="63" y="180" class="small muted">B examples, T positions</text>
-  <g transform="translate(63 214)">
+  <rect x="38" y="132" width="230" height="270" rx="10" class="panel"/>
+  <text x="63" y="165" class="label blue">X: [B, T]</text>
+  <text x="63" y="194" class="small muted">B examples, T positions</text>
+  <g transform="translate(63 228)">
     <rect x="0" y="0" width="52" height="44" rx="5" class="id"/>
     <rect x="58" y="0" width="52" height="44" rx="5" class="id"/>
     <rect x="116" y="0" width="52" height="44" rx="5" class="id"/>
@@ -44,12 +45,12 @@
     <text x="78" y="82" class="text ink">5</text>
     <text x="132" y="82" class="text ink">13</text>
   </g>
-  <text x="63" y="347" class="small muted">each number is a character id</text>
+  <text x="63" y="361" class="small muted">each number is a char id</text>
 
-  <rect x="375" y="118" width="230" height="270" rx="10" class="panel"/>
-  <text x="400" y="151" class="label green">C: [V, E]</text>
-  <text x="400" y="180" class="small muted">V chars, E learned numbers</text>
-  <g transform="translate(408 208)">
+  <rect x="375" y="132" width="230" height="270" rx="10" class="panel"/>
+  <text x="400" y="165" class="label green">C: [V, E]</text>
+  <text x="400" y="194" class="small muted">V chars, E learned nums</text>
+  <g transform="translate(408 222)">
     <rect x="0" y="0" width="150" height="140" class="table"/>
     <line x1="48" y1="0" x2="48" y2="140" stroke="#d0d7df"/>
     <line x1="99" y1="0" x2="99" y2="140" stroke="#d0d7df"/>
@@ -65,16 +66,16 @@
     <text x="57" y="19" class="small ink">feat 0</text>
     <text x="104" y="19" class="small ink">feat 1</text>
   </g>
-  <text x="400" y="372" class="small muted">lookup table of learned vectors</text>
+  <text x="400" y="386" class="small muted">learned vector table</text>
 
-  <path d="M282 253 L360 253" class="line"/>
-  <path d="M618 253 L696 253" class="line"/>
-  <text x="302" y="233" class="small muted">lookup</text>
+  <path d="M282 267 L360 267" class="line"/>
+  <path d="M618 267 L696 267" class="line"/>
+  <text x="302" y="247" class="small muted">lookup</text>
 
-  <rect x="710" y="118" width="232" height="270" rx="10" class="panel"/>
-  <text x="735" y="151" class="label orange">emb: [B,T,E]</text>
-  <text x="735" y="180" class="small muted">same B,T; new E axis</text>
-  <g transform="translate(735 212)">
+  <rect x="710" y="132" width="232" height="270" rx="10" class="panel"/>
+  <text x="735" y="165" class="label orange">emb: [B,T,E]</text>
+  <text x="735" y="194" class="small muted">same B,T; new E axis</text>
+  <g transform="translate(735 226)">
     <rect x="0" y="0" width="48" height="34" rx="5" class="vec"/>
     <rect x="53" y="0" width="48" height="34" rx="5" class="vec"/>
     <rect x="106" y="0" width="48" height="34" rx="5" class="vec"/>
@@ -88,7 +89,7 @@
     <text x="64" y="70" class="small ink">C5</text>
     <text x="114" y="70" class="small ink">C13</text>
   </g>
-  <text x="735" y="323" class="small muted">C5 means row C[5]</text>
-  <text x="735" y="348" class="small muted">one id became</text>
-  <text x="735" y="371" class="small muted">E learned numbers</text>
+  <text x="735" y="337" class="small muted">C5 means row C[5]</text>
+  <text x="735" y="362" class="small muted">one id became</text>
+  <text x="735" y="385" class="small muted">E learned numbers</text>
 </svg>

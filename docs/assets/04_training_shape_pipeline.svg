@@ -22,8 +22,8 @@
   </defs>
   <rect class="bg" width="1040" height="380" rx="18"/>
   <text x="38" y="45" class="label ink">One forward pass, with every shape named</text>
-  <text x="38" y="72" class="text muted">Keep the batch axis B alive from left to right.</text>
-  <text x="38" y="95" class="text muted">Most confusion comes from losing track of axis meaning.</text>
+  <text x="38" y="72" class="text muted">Keep batch axis B alive left to right.</text>
+  <text x="38" y="95" class="text muted">Track what every axis means.</text>
 
   <g transform="translate(38 128)">
     <rect x="0" y="0" width="110" height="86" rx="9" class="box"/>

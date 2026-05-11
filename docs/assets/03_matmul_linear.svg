@@ -49,5 +49,6 @@
   <text x="805" y="346" class="small muted">bias broadcasts</text>
   <text x="805" y="368" class="small muted">to every row</text>
 
-  <text x="70" y="410" class="text ink">Shape rule: [B, in] @ [in, out] + [out] -> [B, out]</text>
+  <text x="70" y="410" class="text ink">Shape rule:</text>
+  <text x="190" y="410" class="text ink">[B,in] @ [in,out] + [out] -> [B,out]</text>
 </svg>

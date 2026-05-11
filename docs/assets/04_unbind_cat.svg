@@ -25,7 +25,7 @@
   </defs>
   <rect class="bg" width="980" height="560" rx="18"/>
   <text x="38" y="48" class="label ink">unbind removes one axis; cat joins another</text>
-  <text x="38" y="78" class="text muted">This is the slow-motion version of view flattening.</text>
+  <text x="38" y="78" class="text muted">This is view flattening in slow motion.</text>
 
   <rect x="42" y="116" width="245" height="315" rx="10" class="panel"/>
   <text x="66" y="148" class="label ink">emb [2,3,2]</text>

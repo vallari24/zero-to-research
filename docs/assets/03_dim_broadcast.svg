@@ -23,8 +23,9 @@
     </marker>
   </defs>
   <rect class="bg" width="960" height="500" rx="18"/>
-  <text x="38" y="48" class="label ink">dim chooses the axis an operation works along</text>
-  <text x="38" y="78" class="text muted">Some ops collapse an axis. Some ops normalize along it.</text>
+  <text x="38" y="48" class="label ink">dim chooses the axis</text>
+  <text x="38" y="78" class="text muted">Some ops collapse an axis.</text>
+  <text x="38" y="103" class="text muted">Some ops normalize along it.</text>
 
   <rect x="60" y="122" width="245" height="250" rx="10" class="panel"/>
   <text x="85" y="155" class="label blue">x [2,3]</text>

@@ -21,8 +21,9 @@
     </marker>
   </defs>
   <rect class="bg" width="980" height="440" rx="18"/>
-  <text x="38" y="48" class="label ink">Healthy training keeps forward and backward signals in range</text>
-  <text x="38" y="78" class="text muted">Too small: signal dies. Too large: signal saturates or explodes.</text>
+  <text x="38" y="48" class="label ink">Healthy training keeps signals in range</text>
+  <text x="38" y="78" class="text muted">Too small: signal dies.</text>
+  <text x="38" y="103" class="text muted">Too large: signal saturates or explodes.</text>
 
   <rect x="50" y="130" width="180" height="120" rx="10" class="panel"/>
   <text x="82" y="165" class="text blue">input</text>
@@ -47,6 +48,6 @@
   <text x="854" y="192" class="small muted">scalar</text>
   <text x="846" y="220" class="small muted">gradient source</text>
 
-  <text x="110" y="320" class="text ink">forward pass: activations should stay centered and scaled</text>
-  <text x="110" y="348" class="text ink">backward pass: gradients should stay nonzero and not blow up</text>
+  <text x="110" y="320" class="text ink">forward: activations stay centered</text>
+  <text x="110" y="348" class="text ink">backward: gradients stay nonzero and stable</text>
 </svg>

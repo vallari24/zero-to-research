@@ -23,7 +23,7 @@
   </defs>
   <rect class="bg" width="980" height="420" rx="18"/>
   <text x="38" y="48" class="label ink">One-hot plus matrix multiply is row lookup</text>
-  <text x="38" y="78" class="text muted">The single 1 chooses one row from the weight matrix.</text>
+  <text x="38" y="78" class="text muted">The single 1 chooses one row.</text>
 
   <rect x="52" y="128" width="230" height="190" rx="10" class="panel"/>
   <text x="77" y="161" class="text blue">one-hot x [1,0,0]</text>

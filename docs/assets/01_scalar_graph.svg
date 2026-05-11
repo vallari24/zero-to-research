@@ -22,7 +22,8 @@
   </defs>
   <rect class="bg" width="980" height="420" rx="18"/>
   <text x="38" y="48" class="label ink">Backprop is chain rule over a graph</text>
-  <text x="38" y="78" class="text muted">Forward computes values. Backward sends gradient signal in reverse.</text>
+  <text x="38" y="78" class="text muted">Forward computes values.</text>
+  <text x="38" y="103" class="text muted">Backward sends gradient signal in reverse.</text>
 
   <rect x="56" y="160" width="92" height="60" rx="8" class="box"/>
   <text x="84" y="193" class="label blue">a</text>
@@ -52,6 +53,6 @@
   <path d="M630 225 L760 225" class="line"/>
   <text x="772" y="210" class="small muted">dL/dx flows back</text>
 
-  <text x="250" y="345" class="text ink">multiply: gradient gets scaled by the other input</text>
-  <text x="250" y="370" class="text ink">add: gradient is copied to both inputs</text>
+  <text x="250" y="345" class="text ink">multiply: gradient scales by the other input</text>
+  <text x="250" y="370" class="text ink">add: gradient copies to both inputs</text>
 </svg>

@@ -24,7 +24,7 @@
   </defs>
   <rect class="bg" width="960" height="500" rx="18"/>
   <text x="38" y="48" class="label ink">tensor = storage + metadata</text>
-  <text x="38" y="78" class="text muted">Views reuse values but change how PyTorch reads them.</text>
+  <text x="38" y="78" class="text muted">Views reuse values with new metadata.</text>
 
   <rect x="60" y="118" width="840" height="90" rx="10" class="panel"/>
   <text x="85" y="148" class="text blue">storage tape</text>

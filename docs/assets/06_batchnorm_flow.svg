@@ -24,7 +24,8 @@
   </defs>
   <rect class="bg" width="980" height="480" rx="18"/>
   <text x="38" y="48" class="label ink">BatchNorm normalizes then rescales</text>
-  <text x="38" y="78" class="text muted">First compute batch mean and variance, then apply learned scale and shift.</text>
+  <text x="38" y="78" class="text muted">Compute batch statistics.</text>
+  <text x="38" y="103" class="text muted">Then apply learned scale and shift.</text>
 
   <rect x="54" y="125" width="220" height="240" rx="10" class="panel"/>
   <text x="78" y="158" class="text blue">before</text>

@@ -23,7 +23,7 @@
   </defs>
   <rect class="bg" width="940" height="430" rx="18"/>
   <text x="38" y="48" class="label ink">Why count tables explode</text>
-  <text x="38" y="78" class="text muted">Every extra context character multiplies the rows by 27.</text>
+  <text x="38" y="78" class="text muted">Each extra context char multiplies rows.</text>
 
   <rect x="38" y="120" width="260" height="230" rx="10" class="panel"/>
   <text x="63" y="153" class="text blue">1 previous char</text>
@@ -67,5 +67,5 @@
   <text x="755" y="328" class="small muted">too many mostly</text>
   <text x="755" y="348" class="small muted">sparse rows</text>
 
-  <text x="38" y="398" class="text ink">MLP replacement: learn context -> next-character probabilities.</text>
+  <text x="38" y="398" class="text ink">MLP: learn context -> probabilities.</text>
 </svg>
