@@ -1198,6 +1198,39 @@ The second version says the same thing directly:
 keep B, merge T and E
 ```
 
+The important thing to remember is that `view` is easiest to understand from
+the inside out:
+
+```text
+1. PyTorch has the values in a fixed order.
+2. A shape tells PyTorch how to group those values.
+3. view gives the same values a different grouping.
+```
+
+For this example, the underlying order is:
+
+```text
+1, 10, 2, 20, 3, 30, 4, 40, 5, 50, 6, 60
+```
+
+As `[2, 3, 2]`, we group those values as:
+
+```text
+2 examples
+  each example has 3 positions
+    each position has 2 embedding numbers
+```
+
+As `[2, 6]`, we group the same values as:
+
+```text
+2 examples
+  each example has 6 flat feature numbers
+```
+
+So for this operation, do not picture the tensor as changing its values.
+Picture the dividers being redrawn around the same values.
+
 #### What does `emb.view(emb.shape[0], -1)` mean?
 
 Since:

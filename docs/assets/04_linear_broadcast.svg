@@ -25,7 +25,7 @@
   </defs>
   <rect class="bg" width="980" height="500" rx="18"/>
   <text x="38" y="48" class="label ink">Matrix multiply: inner axes must match</text>
-  <text x="38" y="78" class="text muted">The shared 6 disappears; the outside axes become the output shape.</text>
+  <text x="38" y="78" class="text muted">The shared 6 disappears. The outside axes become the output.</text>
 
   <rect x="56" y="150" width="210" height="140" rx="8" class="matA"/>
   <text x="92" y="135" class="label blue">flat [32,6]</text>
@@ -59,5 +59,6 @@
   <text x="835" y="402" class="small muted">same bias row</text>
   <text x="835" y="424" class="small muted">added to all 32 rows</text>
 
-  <text x="72" y="454" class="text ink">Shape check: [32, 6] @ [6, 100] + [100] -> [32, 100]</text>
+  <text x="72" y="454" class="text ink">Shape check:</text>
+  <text x="220" y="454" class="text ink">[32, 6] @ [6, 100] + [100] -> [32, 100]</text>
 </svg>

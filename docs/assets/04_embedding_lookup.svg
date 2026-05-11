@@ -25,7 +25,7 @@
   </defs>
   <rect class="bg" width="980" height="500" rx="18"/>
   <text x="38" y="48" class="label ink">C[X] means: replace every id with its row vector</text>
-  <text x="38" y="78" class="text muted">The shape gains one new axis because each scalar id becomes a length-E vector.</text>
+  <text x="38" y="78" class="text muted">A scalar id becomes a length-E vector, so the shape gains one axis.</text>
 
   <rect x="38" y="118" width="230" height="270" rx="10" class="panel"/>
   <text x="63" y="151" class="label blue">X: [B, T]</text>
@@ -72,8 +72,8 @@
   <text x="302" y="233" class="small muted">lookup</text>
 
   <rect x="710" y="118" width="232" height="270" rx="10" class="panel"/>
-  <text x="735" y="151" class="label orange">emb: [B, T, E]</text>
-  <text x="735" y="180" class="small muted">same B,T plus vector axis</text>
+  <text x="735" y="151" class="label orange">emb: [B,T,E]</text>
+  <text x="735" y="180" class="small muted">same B,T; new E axis</text>
   <g transform="translate(735 212)">
     <rect x="0" y="0" width="48" height="34" rx="5" class="vec"/>
     <rect x="53" y="0" width="48" height="34" rx="5" class="vec"/>
@@ -88,6 +88,7 @@
     <text x="64" y="70" class="small ink">C5</text>
     <text x="114" y="70" class="small ink">C13</text>
   </g>
-  <text x="735" y="333" class="small muted">C5 means the full row vector C[5]</text>
-  <text x="735" y="356" class="small muted">a scalar id became E numbers</text>
+  <text x="735" y="323" class="small muted">C5 means row C[5]</text>
+  <text x="735" y="348" class="small muted">one id became</text>
+  <text x="735" y="371" class="small muted">E embedding numbers</text>
 </svg>

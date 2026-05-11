@@ -25,7 +25,7 @@
   </defs>
   <rect class="bg" width="980" height="500" rx="18"/>
   <text x="38" y="48" class="label ink">Loss reads one probability from each row</text>
-  <text x="38" y="78" class="text muted">Each row is one training example. Each column is one possible next character.</text>
+  <text x="38" y="78" class="text muted">Each row is one example. Each column is one possible next character.</text>
 
   <rect x="40" y="120" width="245" height="260" rx="10" class="panel"/>
   <text x="65" y="152" class="label blue">logits [B,27]</text>
@@ -67,5 +67,5 @@
   <rect x="790" y="330" width="110" height="36" rx="5" class="loss"/>
   <text x="808" y="353" class="small ink">-log mean</text>
 
-  <text x="72" y="448" class="text ink">probs[torch.arange(B), Y] means: row 0 column Y[0], row 1 column Y[1], ...</text>
+  <text x="72" y="448" class="text ink">probs[torch.arange(B), Y] selects one target column per row.</text>
 </svg>

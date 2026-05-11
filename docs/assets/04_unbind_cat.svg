@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 520" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 560" role="img" aria-labelledby="title desc">
   <title id="title">Unbind and cat flattening</title>
   <desc id="desc">A diagram showing unbind along dim 1 splitting context positions, then cat along dim 1 joining those slices into feature columns.</desc>
   <defs>
@@ -23,64 +23,51 @@
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
     </marker>
   </defs>
-  <rect class="bg" width="980" height="520" rx="18"/>
-  <text x="38" y="48" class="label ink">unbind removes one axis; cat joins along an existing axis</text>
-  <text x="38" y="78" class="text muted">This is the long form of the same flattening that view does more directly.</text>
+  <rect class="bg" width="980" height="560" rx="18"/>
+  <text x="38" y="48" class="label ink">unbind removes one axis; cat joins another</text>
+  <text x="38" y="78" class="text muted">This is the slow-motion version of view flattening.</text>
 
-  <rect x="42" y="116" width="245" height="300" rx="10" class="panel"/>
+  <rect x="42" y="116" width="245" height="315" rx="10" class="panel"/>
   <text x="66" y="148" class="label ink">emb [2,3,2]</text>
   <text x="66" y="178" class="small muted">dim 1 = position axis</text>
   <g transform="translate(67 215)">
-    <rect x="0" y="0" width="54" height="34" rx="5" class="slice0"/>
-    <rect x="60" y="0" width="54" height="34" rx="5" class="slice1"/>
-    <rect x="120" y="0" width="54" height="34" rx="5" class="slice2"/>
-    <text x="12" y="22" class="small ink">1 10</text>
-    <text x="72" y="22" class="small ink">2 20</text>
-    <text x="132" y="22" class="small ink">3 30</text>
-    <rect x="0" y="58" width="54" height="34" rx="5" class="slice0"/>
-    <rect x="60" y="58" width="54" height="34" rx="5" class="slice1"/>
-    <rect x="120" y="58" width="54" height="34" rx="5" class="slice2"/>
-    <text x="12" y="80" class="small ink">4 40</text>
-    <text x="72" y="80" class="small ink">5 50</text>
-    <text x="132" y="80" class="small ink">6 60</text>
+    <rect x="0" y="0" width="54" height="34" rx="5" class="slice0"/><text x="12" y="22" class="small ink">1 10</text>
+    <rect x="60" y="0" width="54" height="34" rx="5" class="slice1"/><text x="72" y="22" class="small ink">2 20</text>
+    <rect x="120" y="0" width="54" height="34" rx="5" class="slice2"/><text x="132" y="22" class="small ink">3 30</text>
+    <rect x="0" y="58" width="54" height="34" rx="5" class="slice0"/><text x="12" y="80" class="small ink">4 40</text>
+    <rect x="60" y="58" width="54" height="34" rx="5" class="slice1"/><text x="72" y="80" class="small ink">5 50</text>
+    <rect x="120" y="58" width="54" height="34" rx="5" class="slice2"/><text x="132" y="80" class="small ink">6 60</text>
   </g>
 
-  <path d="M310 265 L397 265" class="line"/>
-  <text x="316" y="236" class="text ink">unbind dim=1</text>
-  <text x="316" y="290" class="small muted">split positions apart</text>
+  <path d="M310 270 L397 270" class="line"/>
+  <text x="316" y="238" class="text ink">unbind dim=1</text>
+  <text x="316" y="300" class="small muted">split positions apart</text>
 
-  <rect x="410" y="116" width="250" height="300" rx="10" class="panel"/>
+  <rect x="410" y="116" width="250" height="315" rx="10" class="panel"/>
   <text x="434" y="148" class="label green">3 tensors [2,2]</text>
   <g transform="translate(435 190)">
     <text x="0" y="0" class="small blue">position 0</text>
-    <rect x="0" y="14" width="84" height="34" rx="5" class="slice0"/>
-    <rect x="0" y="54" width="84" height="34" rx="5" class="slice0"/>
-    <text x="16" y="36" class="small ink">1 10</text>
-    <text x="16" y="76" class="small ink">4 40</text>
+    <rect x="0" y="14" width="84" height="34" rx="5" class="slice0"/><text x="16" y="36" class="small ink">1 10</text>
+    <rect x="0" y="54" width="84" height="34" rx="5" class="slice0"/><text x="16" y="76" class="small ink">4 40</text>
     <text x="102" y="0" class="small green">position 1</text>
-    <rect x="102" y="14" width="84" height="34" rx="5" class="slice1"/>
-    <rect x="102" y="54" width="84" height="34" rx="5" class="slice1"/>
-    <text x="118" y="36" class="small ink">2 20</text>
-    <text x="118" y="76" class="small ink">5 50</text>
-    <text x="0" y="128" class="small orange">position 2</text>
-    <rect x="0" y="142" width="84" height="34" rx="5" class="slice2"/>
-    <rect x="0" y="182" width="84" height="34" rx="5" class="slice2"/>
-    <text x="16" y="164" class="small ink">3 30</text>
-    <text x="16" y="204" class="small ink">6 60</text>
+    <rect x="102" y="14" width="84" height="34" rx="5" class="slice1"/><text x="118" y="36" class="small ink">2 20</text>
+    <rect x="102" y="54" width="84" height="34" rx="5" class="slice1"/><text x="118" y="76" class="small ink">5 50</text>
+    <text x="0" y="130" class="small orange">position 2</text>
+    <rect x="0" y="146" width="84" height="34" rx="5" class="slice2"/><text x="16" y="168" class="small ink">3 30</text>
+    <rect x="0" y="186" width="84" height="34" rx="5" class="slice2"/><text x="16" y="208" class="small ink">6 60</text>
   </g>
-  <text x="434" y="386" class="small muted">The position axis disappeared.</text>
+  <text x="434" y="462" class="small muted">The position axis is gone.</text>
+  <text x="434" y="484" class="small muted">Each tensor keeps [example, feature].</text>
 
-  <path d="M682 265 L769 265" class="line"/>
-  <text x="688" y="236" class="text ink">cat dim=1</text>
-  <text x="688" y="290" class="small muted">join columns</text>
+  <path d="M682 270 L769 270" class="line"/>
+  <text x="688" y="238" class="text ink">cat dim=1</text>
+  <text x="688" y="300" class="small muted">join columns</text>
 
-  <rect x="782" y="116" width="158" height="300" rx="10" class="panel"/>
+  <rect x="782" y="116" width="158" height="315" rx="10" class="panel"/>
   <text x="806" y="148" class="label orange">[2,6]</text>
   <g transform="translate(806 220)">
-    <rect x="0" y="0" width="108" height="34" rx="5" class="cell"/>
-    <text x="8" y="22" class="small ink">1 10 2 20 3 30</text>
-    <rect x="0" y="56" width="108" height="34" rx="5" class="cell"/>
-    <text x="8" y="78" class="small ink">4 40 5 50 6 60</text>
+    <rect x="0" y="0" width="108" height="34" rx="5" class="cell"/><text x="8" y="22" class="small ink">1 10 2 20 3 30</text>
+    <rect x="0" y="56" width="108" height="34" rx="5" class="cell"/><text x="8" y="78" class="small ink">4 40 5 50 6 60</text>
   </g>
   <text x="806" y="346" class="small muted">same result as</text>
   <text x="806" y="368" class="small muted">emb.view(2,6)</text>
