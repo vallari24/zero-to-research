@@ -792,6 +792,19 @@ C:   [V, E]       lookup table
 C[X]: [B, T, E]   every id replaced by an E-number vector
 ```
 
+Here `E` does not mean the character `e`. It means the embedding width: how
+many learned numbers we store for each character. In the toy setup:
+
+```text
+E = 2
+```
+
+so each character row in `C` has two learned values:
+
+```text
+C[5] = [feature 0 value, feature 1 value]
+```
+
 The batch axis `B` and context-position axis `T` stay exactly where they were.
 The new axis `E` appears because each integer id has been replaced by a vector.
 

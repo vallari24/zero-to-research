@@ -48,7 +48,7 @@
 
   <rect x="375" y="118" width="230" height="270" rx="10" class="panel"/>
   <text x="400" y="151" class="label green">C: [V, E]</text>
-  <text x="400" y="180" class="small muted">V chars, E features</text>
+  <text x="400" y="180" class="small muted">V chars, E learned numbers</text>
   <g transform="translate(408 208)">
     <rect x="0" y="0" width="150" height="140" class="table"/>
     <line x1="48" y1="0" x2="48" y2="140" stroke="#d0d7df"/>
@@ -62,8 +62,8 @@
     <text x="14" y="19" class="small ink">id 0</text>
     <text x="14" y="75" class="small ink">id 5</text>
     <text x="8" y="131" class="small muted">...</text>
-    <text x="63" y="19" class="small ink">e0</text>
-    <text x="112" y="19" class="small ink">e1</text>
+    <text x="57" y="19" class="small ink">feat 0</text>
+    <text x="104" y="19" class="small ink">feat 1</text>
   </g>
   <text x="400" y="372" class="small muted">lookup table of learned vectors</text>
 
@@ -90,5 +90,5 @@
   </g>
   <text x="735" y="323" class="small muted">C5 means row C[5]</text>
   <text x="735" y="348" class="small muted">one id became</text>
-  <text x="735" y="371" class="small muted">E embedding numbers</text>
+  <text x="735" y="371" class="small muted">E learned numbers</text>
 </svg>
