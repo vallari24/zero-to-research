@@ -1308,6 +1308,150 @@ This baseline MLP makes the next questions visible:
 - Are gradients flowing through every layer?
 - Are parameter updates large enough to matter but small enough to stay stable?
 
+## Fixing The Initial Loss: Initialization Essentials
+
+The first health check is the very first loss. In this run, training starts
+with a huge loss and then drops almost vertically:
+
+```text
+      0/  20000: 27.8817
+   1000/  20000: 4.2208
+   2000/  20000: 2.9934
+   3000/  20000: 2.9829
+   4000/  20000: 2.2823
+```
+
+![Initial loss hockey-stick drop](assets/06_initial_loss_hockey_stick.png)
+
+This plot is `log10(loss)`, so the early spike is compressed visually. The raw
+printed loss tells the real story: the first loss is about `27.9`.
+
+That should immediately feel wrong.
+
+At initialization, before the model has learned anything, it should not be
+confident. It should behave roughly like a uniform random guess over the `27`
+possible next characters.
+
+The expected initial loss for uniform predictions is:
+
+```text
+-log(1 / 27) = log(27) ~= 3.30
+```
+
+So an initial loss near `3.3` is reasonable. An initial loss near `28` means the
+model is confidently wrong.
+
+### Why The Hockey Stick Happens
+
+The output layer produces logits:
+
+```python
+logits = h @ W2 + b2
+```
+
+Logits are raw scores before softmax. If the logits are large in magnitude at
+initialization, softmax turns them into very sharp probabilities.
+
+Example bad initial logits:
+
+```text
+[-2.35, 36.44, -10.73, 5.72, 18.64, -11.70, ...]
+```
+
+These are not gentle scores around zero. They are huge positive and negative
+numbers. A logit like `36` dominates softmax, while many other classes get
+probability almost zero.
+
+If the model assigns almost zero probability to the correct next character, then
+cross entropy becomes huge:
+
+```text
+loss = -log(probability assigned to the correct class)
+```
+
+So the early training steps are wasted doing obvious cleanup:
+
+```text
+make the overconfident wrong logits less extreme
+```
+
+That cleanup is the hockey-stick drop. The model is not learning subtle name
+structure yet. It is first undoing bad initialization.
+
+### What We Want At Initialization
+
+At the start, logits should be roughly around zero:
+
+```text
+logits ~= [0, 0, 0, ..., 0]
+```
+
+If all logits are equal, softmax gives a uniform distribution:
+
+```text
+each character probability ~= 1 / 27
+```
+
+That gives the healthy starting loss:
+
+```text
+log(27) ~= 3.30
+```
+
+The model can then spend training steps learning real structure instead of
+repairing extreme output scores.
+
+### The Simple Output-Layer Fix
+
+The output layer is the direct source of the logits, so start there.
+
+Instead of initializing `W2` and `b2` at full random scale:
+
+```python
+W2 = torch.randn((n_hidden, vocab_size))
+b2 = torch.randn(vocab_size)
+```
+
+initialize them so the first logits are small:
+
+```python
+W2 = torch.randn((n_hidden, vocab_size)) * 0.01
+b2 = torch.zeros(vocab_size)
+```
+
+This says:
+
+```text
+start with weak output weights
+start with no output bias preference
+```
+
+Then the network begins near uniform predictions.
+
+### The Hidden-Layer Initialization Preview
+
+The output logits are only one part of initialization. The hidden layer also
+needs a reasonable scale:
+
+```python
+W1 = torch.randn((n_embd * block_size, n_hidden)) * (5 / 3) / ((n_embd * block_size) ** 0.5)
+b1 = torch.randn(n_hidden) * 0.01
+```
+
+The high-level idea:
+
+```text
+W1 should not make hidden pre-activations too large
+b1 should not push tanh into saturation
+W2 should not make first logits overconfident
+```
+
+We will keep unpacking this in the next section. For now, the key habit is:
+
+```text
+check the first loss before trusting the training curve
+```
+
 ## BatchNorm Intuition
 
 BatchNorm is a way to normalize activations and then let the network learn how
