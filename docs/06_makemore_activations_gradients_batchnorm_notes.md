@@ -1,7 +1,7 @@
 # Building Makemore Part 3: Activations, Gradients, and BatchNorm
 
-This note converts the Part 3 notebook into a shape-first explanation of the
-Makemore MLP.
+This post builds a Makemore-style MLP from tensors and explains every shape
+along the way.
 
 The goal is not just to run the code. The goal is to make the tensor pipeline
 stick in memory:
@@ -30,7 +30,7 @@ Xb [B, T]
 
 Where:
 
-| symbol | meaning | in this notebook |
+| symbol | meaning | value in this build |
 | --- | --- | ---: |
 | `B` | batch size | `32` |
 | `T` | context length | `3` |
@@ -72,7 +72,7 @@ Before training, the learned numbers are random. During training, the model:
 4. nudges the parameters to reduce the loss
 ```
 
-In this notebook the model is a small MLP:
+The model is a small MLP:
 
 ```text
 context character ids
@@ -125,25 +125,20 @@ That one rule explains almost all of the parameter shapes below.
 
 ## 1. Dataset Generation, Tokens, and Splits
 
-Skip the file-loading detail. The important tensor concept is this:
+Assume we start with a Python list of names:
+
+```python
+words = ["emma", "olivia", "ava", "isabella", ...]
+```
+
+The important tensor concept is this:
 
 ```text
 Python strings -> integer token ids -> tensors X and Y
 ```
 
 The model cannot read characters directly. It needs each character converted
-into an integer id.
-
-```python
-chars = sorted(list(set("".join(words))))
-
-stoi = {char: i + 1 for i, char in enumerate(chars)}
-stoi["."] = 0
-itos = {v: k for k, v in stoi.items()}
-vocab_size = len(itos)
-```
-
-This creates two maps:
+into an integer id. Conceptually, we create two maps:
 
 ```text
 stoi: character -> integer id
@@ -157,7 +152,7 @@ start padding
 end of name
 ```
 
-So the vocabulary has:
+So the vocabulary size is:
 
 ```text
 26 letters + "." = 27 tokens
@@ -195,29 +190,27 @@ In token form, each row becomes one input-output training pair:
 
 ![Dataset generation with a sliding context window](assets/06_dataset_context_window.svg)
 
-The dataset builder does exactly that:
+The core dataset operation is the sliding context window:
 
 ```python
 block_size = 3
+context = [0] * block_size
 
-def build_dataset(words):
-    X, Y = [], []
-
-    for w in words:
-        context = [0] * block_size
-        for ch in w + ".":
-            ix = stoi[ch]
-            X.append(context)
-            Y.append(ix)
-            context = context[1:] + [ix]
-
-    X = torch.tensor(X)  # [num_examples, block_size]
-    Y = torch.tensor(Y)  # [num_examples]
-    print(X.shape, Y.shape)
-    return X, Y
+ix = stoi[ch]
+X.append(context)
+Y.append(ix)
+context = context[1:] + [ix]
 ```
 
-The tensor concept:
+After repeating that for every character in every name, convert the collected
+lists into tensors:
+
+```python
+X = torch.tensor(X)  # [num_examples, block_size]
+Y = torch.tensor(Y)  # [num_examples]
+```
+
+The tensor concept is:
 
 ```text
 X stores contexts
@@ -243,20 +236,10 @@ moving character history.
 
 ### Train, Dev, and Test Splits
 
-The split is only there to measure generalization:
+The split is only there to measure generalization. Use most names for training,
+some names for validation, and a final held-out group for testing.
 
-```python
-random.seed(42)
-random.shuffle(words)
-n1 = int(0.8 * len(words))
-n2 = int(0.9 * len(words))
-
-Xtr,  Ytr  = build_dataset(words[:n1])     # 80%
-Xdev, Ydev = build_dataset(words[n1:n2])   # 10%
-Xte,  Yte  = build_dataset(words[n2:])     # 10%
-```
-
-In one run, the notebook prints:
+The resulting split shapes look like:
 
 ```text
 torch.Size([182625, 3]) torch.Size([182625])
@@ -279,26 +262,29 @@ Ytr: [182625]
 
 ## 2. MLP Revisited: Creating the Parameters
 
-The notebook creates five tensors:
+The model uses five learned tensors:
 
 ```python
 n_embd = 10
 n_hidden = 200
 
-g = torch.Generator().manual_seed(2147483647)
-C = torch.randn((vocab_size, n_embd), generator=g)
-W1 = torch.randn((n_embd * block_size, n_hidden), generator=g)
-b1 = torch.randn(n_hidden, generator=g)
-W2 = torch.randn((n_hidden, vocab_size), generator=g)
-b2 = torch.randn(vocab_size, generator=g)
+C = torch.randn((vocab_size, n_embd))
+W1 = torch.randn((n_embd * block_size, n_hidden))
+b1 = torch.randn(n_hidden)
+W2 = torch.randn((n_hidden, vocab_size))
+b2 = torch.randn(vocab_size)
 
 parameters = [C, W1, b1, W2, b2]
-
-for p in parameters:
-    p.requires_grad = True
 ```
 
 The whole model is inside these five tensors.
+
+For PyTorch to learn these tensors, they must track gradients:
+
+```python
+for p in parameters:
+    p.requires_grad = True
+```
 
 ### The Parameter Shape Rule
 
@@ -482,11 +468,8 @@ PyTorch broadcasts it:
 
 ### Parameter Count
 
-The notebook prints:
-
-```python
-print(sum(p.nelement() for p in parameters))
-```
+The parameter count is the number of scalar values across all five learned
+tensors:
 
 The count is:
 
@@ -500,8 +483,7 @@ b2:  27            =    27
 total              = 11897
 ```
 
-Use `p.nelement()` or `p.numel()`. The parentheses matter because it is a
-method call.
+In PyTorch, this is what `p.nelement()` or `p.numel()` measures for each tensor.
 
 ### How Should These Dimensions Be Chosen?
 
@@ -579,7 +561,7 @@ T*E numbers -> H hidden features
 H hidden features -> V next-token scores
 ```
 
-## Tensor Concepts Used In This Notebook
+## Tensor Concepts Used In This Model
 
 Before the training loop, it helps to isolate three PyTorch ideas that appear
 again and again.
@@ -711,7 +693,7 @@ If `probs` is:
 then:
 
 ```python
-ix = torch.multinomial(probs, num_samples=1, generator=g).item()
+ix = torch.multinomial(probs, num_samples=1).item()
 ```
 
 means:
@@ -720,24 +702,22 @@ means:
 pick one character id according to the 27 probabilities
 ```
 
-High probability means more likely, not guaranteed. The `generator=g` makes the
-random choices reproducible.
+High probability means more likely, not guaranteed.
 
 ## 3. Training: Forward Pass, Backward Pass, Update
 
-The training loop:
+Here is the complete training loop:
 
 ![Training loop for the Makemore MLP](assets/06_training_loop.svg)
 
 ```python
 max_steps = 200000
 batch_size = 32
-lossi = []
 
 for i in range(max_steps):
 
     # minibatch
-    ix = torch.randint(0, Xtr.shape[0], (batch_size,), generator=g)
+    ix = torch.randint(0, Xtr.shape[0], (batch_size,))
     Xb, Yb = Xtr[ix], Ytr[ix]
 
     # forward pass
@@ -757,16 +737,12 @@ for i in range(max_steps):
     for p in parameters:
         p.data += -lr * p.grad
 
-    # track stats
-    if i % 10000 == 0:
-        print(f"{i:7d}/{max_steps:7d}: {loss.item():.4f}")
-    lossi.append(loss.log10().item())
 ```
 
 ### Minibatch
 
 ```python
-ix = torch.randint(0, Xtr.shape[0], (batch_size,), generator=g)
+ix = torch.randint(0, Xtr.shape[0], (batch_size,))
 Xb, Yb = Xtr[ix], Ytr[ix]
 ```
 
@@ -1029,13 +1005,13 @@ def split_loss(split):
     hpred = torch.tanh(embcat @ W1 + b1)
     logits = hpred @ W2 + b2
     loss = F.cross_entropy(logits, y)
-    print(split, loss.item())
+    return loss.item()
 
-split_loss("train")
-split_loss("val")
+train_loss = split_loss("train")
+val_loss = split_loss("val")
 ```
 
-Example output from the notebook:
+Example output after training:
 
 ```text
 train 2.1200809478759766
@@ -1094,37 +1070,33 @@ given a context, choose one next character from the model's probabilities
 
 ![Sampling loop for Makemore](assets/06_sampling_loop.svg)
 
-The code:
+Here is the complete sampling loop:
 
 ```python
-g = torch.Generator().manual_seed(2147483647 + 10)
+out = []
+context = [0] * block_size
 
-for _ in range(20):
+while True:
 
-    out = []
-    context = [0] * block_size
+    # forward pass the neural net
+    emb = C[torch.tensor([context])]
+    embcat = emb.view(emb.shape[0], -1)
+    h = torch.tanh(embcat @ W1 + b1)
+    logits = h @ W2 + b2
+    probs = F.softmax(logits, dim=1)
 
-    while True:
+    # sample from the distribution
+    ix = torch.multinomial(probs, num_samples=1).item()
 
-        # forward pass the neural net
-        emb = C[torch.tensor([context])]
-        embcat = emb.view(emb.shape[0], -1)
-        h = torch.tanh(embcat @ W1 + b1)
-        logits = h @ W2 + b2
-        probs = F.softmax(logits, dim=1)
+    # shift the context window
+    context = context[1:] + [ix]
+    out.append(itos[ix])
 
-        # sample from the distribution
-        ix = torch.multinomial(probs, num_samples=1, generator=g).item()
+    # if we get to ".", break
+    if ix == 0:
+        break
 
-        # shift the context window
-        context = context[1:] + [ix]
-        out.append(itos[ix])
-
-        # if we get to ".", break
-        if ix == 0:
-            break
-
-    print("".join(out))
+generated_name = "".join(out)
 ```
 
 ### Forward Pass The Neural Net
@@ -1213,7 +1185,7 @@ turn this one row of 27 scores into one probability distribution over 27 charact
 Then:
 
 ```python
-ix = torch.multinomial(probs, num_samples=1, generator=g).item()
+ix = torch.multinomial(probs, num_samples=1).item()
 ```
 
 means:
