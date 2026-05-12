@@ -104,6 +104,20 @@ or flattened as:
 That is already much larger, and it is clear that this approach is not
 scalable.
 
+![Context table growth](assets/04_context_table_growth.svg)
+
+The visual lesson is:
+
+```text
+more context characters
+-> exponentially more exact contexts
+-> many sparse rows
+-> weak generalization
+```
+
+This is why the MLP matters. It gives us a way to use longer context without
+building a separate row for every possible exact character sequence.
+
 ## Why Move to an MLP
 
 This is the reason to move to a neural model.
@@ -139,6 +153,94 @@ embed the context
 ```
 
 That is the setup for the rest of Part 2.
+
+## How To Read Tensor Shapes In This Note
+
+Before going further, we need a reliable way to read tensor dimensions.
+
+Many PyTorch expressions look short:
+
+```python
+emb.view(-1, 6) @ W1 + b1
+```
+
+But the expression is only readable if we know what every axis means. So
+throughout this note, use this rule:
+
+```text
+never read a shape as just numbers;
+read it as named axes
+```
+
+For the small makemore MLP, the recurring axis names are:
+
+| symbol | meaning | common value in examples |
+| --- | --- | ---: |
+| `B` | batch size, or number of examples being processed together | `32` |
+| `T` | context length, or number of previous characters | `3` |
+| `E` | embedding size, or numbers per character vector | `2` |
+| `H` | hidden-layer width | `100` |
+| `V` | vocabulary size, or number of possible characters | `27` |
+
+So instead of reading:
+
+```text
+[32, 3, 2]
+```
+
+as three anonymous numbers, read it as:
+
+```text
+[B, T, E]
+```
+
+meaning:
+
+```text
+[examples, context positions, embedding learned numbers]
+```
+
+![Shape grammar](assets/04_shape_grammar.svg)
+
+This gives us a small shape grammar:
+
+| operation | what it does to axes | example |
+| --- | --- | --- |
+| lookup | replaces ids with vectors, adding a feature axis | `[B, T] -> [B, T, E]` |
+| flatten/view | merges adjacent axes without doing arithmetic | `[B, T, E] -> [B, T*E]` |
+| unbind | removes one axis by splitting along it | `[B, T, E] -> T tensors of [B, E]` |
+| cat | joins tensors along an existing axis | three `[B, E]` tensors -> `[B, 3E]` |
+| matmul | contracts the matching inner axis | `[B, 6] @ [6, H] -> [B, H]` |
+| broadcast | virtually repeats a smaller tensor across a missing axis | `[B, H] + [H] -> [B, H]` |
+| softmax | normalizes along the vocabulary axis | logits `[B, V]` -> probs `[B, V]` |
+
+The important habit is to keep asking:
+
+```text
+which axis is being kept?
+which axis is being removed?
+which axis is being created?
+which axes are being merged?
+```
+
+If you can answer those four questions, the PyTorch operation usually becomes
+much less mysterious.
+
+The main dimension-heavy ideas in this note are:
+
+- context table growth: why `[27, 27, 27, 27]` can also be read as `[19683, 27]`
+- embedding lookup: why `C[X]` changes `[B, T]` into `[B, T, E]`
+- flattening: why `[B, T, E]` becomes `[B, T*E]`
+- slicing/indexing: why `emb[:, 0, :]` keeps some axes and removes others
+- `unbind`: why splitting along `dim=1` removes the context-position axis
+- `cat`: why joining position slices side by side recreates the flat feature row
+- `view`: why `-1` means "infer this axis from the total number of scalars"
+- matrix multiply: why `[B, 6] @ [6, H]` becomes `[B, H]`
+- broadcasting: why `[B, H] + [H]` is valid
+- target indexing: why `probs[torch.arange(B), Y]` returns one probability per example
+- initialization scale: why large random logits create fake confidence before learning starts
+
+The rest of the note repeatedly returns to those operations.
 
 ## Intuition Behind the Modeling Approach
 
@@ -678,6 +780,48 @@ So in this case:
 - `3` characters per example
 - `2` numbers per character embedding
 
+Visually:
+
+![Embedding lookup](assets/04_embedding_lookup.svg)
+
+The shape move is:
+
+```text
+X:   [B, T]       character ids
+C:   [V, E]       lookup table
+C[X]: [B, T, E]   every id replaced by a vector with E learned numbers
+```
+
+Here `E` does not mean the character `e`. It means the embedding width: how
+many learned numbers we store for each character. In the toy setup:
+
+```text
+E = 2
+```
+
+so each character row in `C` has two learned values:
+
+```text
+C[5] = [feature 0 value, feature 1 value]
+```
+
+The batch axis `B` and context-position axis `T` stay exactly where they were.
+The new axis `E` appears because each integer id has been replaced by a vector.
+
+#### Memory anchor
+
+Whenever you see:
+
+```python
+C[X]
+```
+
+say this out loud:
+
+```text
+same grid as X, but every cell now contains a vector
+```
+
 ### 5. A concrete example of `[32, 3, 2]`
 
 Take one input row:
@@ -778,7 +922,31 @@ to:
 [32, 6]
 ```
 
+![Flattening embeddings with view](assets/04_flatten_view.svg)
+
 That flattened `[32, 6]` tensor is what gets fed into the next linear layer.
+
+The mental model:
+
+```text
+keep the example axis separate
+merge the context-position axis and embedding-feature axis
+```
+
+In named-axis form:
+
+```text
+[B, T, E] -> [B, T*E]
+```
+
+For this toy case:
+
+```text
+[32, 3, 2] -> [32, 3*2] -> [32, 6]
+```
+
+Nothing has been averaged, summed, multiplied, or learned. The numbers are only
+being lined up into one feature row per training example.
 
 ### 7. Shape Summary
 
@@ -812,6 +980,19 @@ Read this as:
 - `2` examples
 - `3` positions in the context
 - `2` embedding numbers per position
+
+In named-axis form:
+
+```text
+emb: [B, T, E]
+```
+
+The values are deliberately chosen so the movement is visible:
+
+```text
+example 0: [1,10] [2,20] [3,30]
+example 1: [4,40] [5,50] [6,60]
+```
 
 So the dimensions mean:
 
@@ -891,6 +1072,30 @@ tensor([
 #### What does `torch.unbind` do?
 
 `torch.unbind` splits a tensor along one chosen dimension.
+
+The shape rule is:
+
+```text
+unbind removes the chosen axis
+```
+
+So if:
+
+```text
+emb: [B, T, E] = [2, 3, 2]
+```
+
+then:
+
+```text
+torch.unbind(emb, dim=1)
+```
+
+splits the `T` axis into `T` separate tensors. Each result keeps only:
+
+```text
+[B, E] = [2, 2]
+```
 
 ```python
 torch.unbind(emb, dim=0)
@@ -978,6 +1183,67 @@ Shape:
 [2, 6]
 ```
 
+![Unbind and cat](assets/04_unbind_cat.svg)
+
+This is why:
+
+```python
+torch.cat(torch.unbind(emb, 1), 1)
+```
+
+and:
+
+```python
+emb.view(emb.shape[0], -1)
+```
+
+produce the same flattened layout for this contiguous tensor. The first version
+shows the operation in slow motion:
+
+```text
+split positions apart
+-> line the position vectors up side by side
+```
+
+The second version says the same thing directly:
+
+```text
+keep B, merge T and E
+```
+
+The important thing to remember is that `view` is easiest to understand from
+the inside out:
+
+```text
+1. PyTorch has the values in a fixed order.
+2. A shape tells PyTorch how to group those values.
+3. view gives the same values a different grouping.
+```
+
+For this example, the underlying order is:
+
+```text
+1, 10, 2, 20, 3, 30, 4, 40, 5, 50, 6, 60
+```
+
+As `[2, 3, 2]`, we group those values as:
+
+```text
+2 examples
+  each example has 3 positions
+    each position has 2 embedding numbers
+```
+
+As `[2, 6]`, we group the same values as:
+
+```text
+2 examples
+  each example has 6 flat feature numbers
+```
+
+So for this operation, do not picture the tensor as changing its values.
+Picture the dividers being redrawn around the same values.
+
 #### What does `emb.view(emb.shape[0], -1)` mean?
 
 Since:
@@ -1051,6 +1317,96 @@ into:
 
 by flattening each example.
 
+#### The two rules of `view`
+
+For this note, remember two rules.
+
+Rule 1:
+
+```text
+view can change the shape, but not the number of scalars
+```
+
+So these are allowed because both contain `12` numbers:
+
+```text
+[2, 3, 2] -> [2, 6]
+[2, 3, 2] -> [6, 2]
+[2, 3, 2] -> [12]
+```
+
+This is not allowed:
+
+```text
+[2, 3, 2] -> [2, 7]
+```
+
+because:
+
+```text
+2 * 3 * 2 = 12
+2 * 7 = 14
+```
+
+Rule 2:
+
+```text
+-1 means infer the missing axis from the total count
+```
+
+So:
+
+```python
+emb.view(emb.shape[0], -1)
+```
+
+means:
+
+```text
+keep axis 0 as 2 examples,
+then infer however many columns are needed
+```
+
+Because the tensor has `12` numbers total and axis 0 is fixed at `2`, the
+second axis must be:
+
+```text
+12 / 2 = 6
+```
+
+So the result is:
+
+```text
+[2, 6]
+```
+
+The deeper idea:
+
+```text
+view is not a neural-network operation;
+it is a bookkeeping operation
+```
+
+It prepares the data layout so the next matrix multiply sees one feature vector
+per example.
+
+#### Quick shape checks
+
+Try answering these before looking ahead:
+
+1. If `emb.shape = [32, 3, 2]`, what is `emb.view(32, -1).shape`?
+2. If `emb.shape = [32, 5, 12]`, what is `emb.view(32, -1).shape`?
+3. If `emb.shape = [B, T, E]`, what axes are merged by `emb.view(B, -1)`?
+
+<details>
+<summary>Answers</summary>
+
+1. `[32, 6]`, because `3 * 2 = 6`.
+2. `[32, 60]`, because `5 * 12 = 60`.
+3. The `T` and `E` axes are merged into one feature axis.
+
+</details>
+
 ## Main Intuition
 
 A very compact summary of the whole model is:
@@ -1076,6 +1432,22 @@ use a neural net to predict the next word
 
 ## Training the Model
 
+Here is the full forward pass as a shape pipeline:
+
+![Makemore MLP shape pipeline](assets/04_training_shape_pipeline.svg)
+
+Read the pipeline left to right:
+
+```text
+ids
+-> vectors
+-> one flat row per example
+-> hidden features
+-> one score per possible next character
+-> probabilities
+-> one scalar loss
+```
+
 For the small character-level `makemore` setup, one simple parameterization is:
 
 - `C`: embedding table of shape `[27, 2]`
@@ -1083,6 +1455,16 @@ For the small character-level `makemore` setup, one simple parameterization is:
 - `b1`: first-layer bias of shape `[100]`
 - `W2`: second-layer weights of shape `[100, 27]`
 - `b2`: second-layer bias of shape `[27]`
+
+With named axes, this is:
+
+| parameter | named shape | meaning |
+| --- | --- | --- |
+| `C` | `[V, E]` | one embedding vector per character |
+| `W1` | `[T*E, H]` | maps flattened context features to hidden features |
+| `b1` | `[H]` | one bias per hidden neuron |
+| `W2` | `[H, V]` | maps hidden features to character scores |
+| `b2` | `[V]` | one bias per output character |
 
 Here `6` comes from:
 
@@ -1128,6 +1510,29 @@ W1 = torch.randn((6, 100), generator=g)
 
 The `100` is the hidden-layer width: the number of hidden neurons we want.
 
+![Linear layer and broadcasting](assets/04_linear_broadcast.svg)
+
+The matrix multiply rule is:
+
+```text
+[rows, shared] @ [shared, columns] -> [rows, columns]
+```
+
+So:
+
+```text
+[32, 6] @ [6, 100] -> [32, 100]
+```
+
+The two `6`s match and disappear. The outside dimensions, `32` and `100`,
+become the result.
+
+In named-axis form:
+
+```text
+[B, T*E] @ [T*E, H] -> [B, H]
+```
+
 ### Forward pass
 
 The forward pass is:
@@ -1165,6 +1570,28 @@ because:
 
 PyTorch automatically adds the same `b1` row to every example in the batch.
 
+This is broadcasting. The model does not store `32` separate copies of `b1`.
+PyTorch treats:
+
+```text
+b1: [H]
+```
+
+as if it were:
+
+```text
+[B, H]
+```
+
+for the purpose of this addition.
+
+The shape intuition:
+
+```text
+one bias per hidden neuron,
+shared across every example in the batch
+```
+
 ### From logits to probabilities
 
 `logits` are just raw scores for the `27` possible next characters.
@@ -1193,6 +1620,39 @@ The manual negative log-likelihood loss is:
 ```python
 loss = -probs[torch.arange(X.shape[0]), Y].log().mean()
 ```
+
+![Softmax and loss indexing](assets/04_softmax_loss.svg)
+
+The indexing expression is easier if we name the axes:
+
+```text
+probs: [B, V]
+Y:     [B]
+```
+
+`Y` stores one correct column index for every row in the batch.
+
+So:
+
+```python
+probs[torch.arange(B), Y]
+```
+
+means:
+
+```text
+for each example row,
+select the probability in the correct target column
+```
+
+That produces:
+
+```text
+[B]
+```
+
+Then `.log().mean()` turns those `B` correct-character probabilities into one
+scalar loss.
 
 ### Backward pass and update
 
@@ -1516,6 +1976,24 @@ probs = F.softmax(logits, dim=1)
 This is the same forward pass as training, except now we only have one example,
 so the batch size is `1`.
 
+The shapes are:
+
+```text
+context                 [T]
+torch.tensor([context]) [1, T]
+emb                     [1, T, E]
+emb.view(1, -1)         [1, T*E]
+h                       [1, H]
+logits                  [1, V]
+probs                   [1, V]
+```
+
+So sampling does not use a different model. It is the same model with:
+
+```text
+B = 1
+```
+
 The result is:
 
 ```text
@@ -1613,7 +2091,7 @@ read as the final held-out check after choosing from validation.
 
 ### E01. Tune Hyperparameters to Beat Validation Loss 2.2
 
-The target from the lecture was to beat a validation loss of about:
+The target for this run was to beat a validation loss of about:
 
 ```text
 2.2
@@ -2000,7 +2478,7 @@ Results:
 
 | initialization | train loss | validation loss | test loss |
 | --- | ---: | ---: | ---: |
-| careless lecture-style | `26.0047` | `26.0105` | `26.0153` |
+| careless large-logit init | `26.0047` | `26.0105` | `26.0153` |
 
 This is very bad.
 
@@ -2431,10 +2909,26 @@ make optimization stable
 
 The external reference points that helped interpret these runs:
 
-- Karpathy's original Part 2 notebook gives a validation loss around `2.17` for
-  the starter MLP setup.
-- Part 3 initialization notes explain why the ideal initial loss is
-  `log(27) = 3.2958` and why very large random logits create a fake high loss.
+- A simple starter MLP should get validation loss around `2.2`, with tuned
+  variants moving lower.
+- The ideal initial loss is `log(27) = 3.2958`; very large random logits create
+  a fake high loss before learning has really begun.
 - Bengio et al. 2003 motivates distributed embeddings, longer contexts, direct
   connections, regularization, and mixing neural predictions with n-gram
   predictions.
+- Tensor shape vocabulary is easier to learn when each axis has a name and a
+  visual role. TensorFlow's tensor guide uses the same vocabulary of shape,
+  rank, axis, and size, and emphasizes keeping track of what each axis means:
+  https://www.tensorflow.org/guide/tensor
+- PyTorch's docs are the ground truth for the operations used here:
+  `view`/tensor views, broadcasting, `unbind`, `cat`, and matrix multiplication:
+  https://docs.pytorch.org/docs/main/tensor_view.html,
+  https://docs.pytorch.org/docs/2.9/notes/broadcasting.html,
+  https://docs.pytorch.org/docs/2.12/generated/torch.unbind.html,
+  https://docs.pytorch.org/docs/stable/generated/torch.cat,
+  https://docs.pytorch.org/docs/stable/generated/torch.matmul
+- The visual rewrite follows a few learning-science principles: words plus
+  pictures, worked examples, and retrieval practice. Useful summaries:
+  https://instructionaldesign.io/toolkit/mayer/,
+  https://www.mdpi.com/2227-7102/14/8/813,
+  https://link.springer.com/article/10.1007/s10648-021-09595-9

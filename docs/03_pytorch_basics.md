@@ -1,150 +1,372 @@
 # PyTorch Basics
 
-## Torch
+This note is a foundation for reading the later makemore notebooks. The goal is
+not to memorize every PyTorch API. The goal is to build a durable way to reason
+about tensors.
 
-`torch` is the main PyTorch library. It gives you tensors, fast numerical
-operations, autograd, and the core tools for building neural networks.
-
-## Tensor
-
-A tensor is a container of numbers. It can be a scalar, a vector, a matrix, or
-a higher-dimensional array.
-
-## Shape
-
-`shape` tells you the size along each axis. For example, `(28, 28)` means a
-2D tensor with 28 rows and 28 columns.
-
-## Tensor Internals: Data and Metadata
-
-One useful mental model from ezyang's PyTorch internals writeup is:
+The main habit:
 
 ```text
-tensor = data + metadata
+always know what each axis means
 ```
 
-The data is the actual block of numbers in memory.
+Most PyTorch confusion comes from reading shapes as anonymous numbers:
 
-The metadata tells PyTorch how to interpret those numbers. The most important
-pieces are:
+```text
+[32, 3, 2]
+```
 
-- `shape`: how many elements live along each dimension
-- `stride`: how far PyTorch must jump in memory when you move by `1` along a dimension
-- `storage offset`: where this tensor's logical view starts inside the underlying storage
+Instead, read them as named axes:
 
-So two tensors can share the same underlying data but interpret it differently.
-That is the basic idea behind views.
+```text
+[B, T, E]
+```
+
+meaning:
+
+```text
+B = batch examples
+T = time steps / context positions
+E = embedding width, or learned numbers per token
+```
+
+Once the axes have names, operations like `view`, `sum(dim=...)`,
+`softmax(dim=...)`, broadcasting, `@`, and `nn.Embedding` become much easier to
+predict.
+
+## How To Study This Note
+
+Use this note as worked examples, not as passive reading.
+
+For every code block, ask four questions:
+
+```text
+1. What are the input shapes?
+2. What does each axis mean?
+3. Which axis is kept, removed, created, or merged?
+4. What output shape should I expect before running the code?
+```
+
+That habit is more important than any single API.
+
+The structure of this note follows a few learning principles:
+
+- use named axes so the shape has meaning
+- use one small running example repeatedly
+- show the operation visually before the abstraction
+- use worked examples before shortcuts
+- add small recall checks so the idea survives after reading
+
+## Shape Vocabulary
+
+A tensor is a container of numbers. The number of axes is the tensor's rank.
+The size of each axis is the tensor's shape.
+
+![Tensor axes and shapes](assets/03_tensor_axes.svg)
+
+Common forms:
+
+| object | example shape | meaning |
+| --- | --- | --- |
+| scalar | `[]` | one number |
+| vector | `[F]` | one axis of features |
+| matrix | `[B, F]` | examples by features |
+| 3D tensor | `[B, T, F]` | examples by time by features |
+
+Common axis names in this repo:
+
+| axis | meaning | examples |
+| --- | --- | --- |
+| `B` | batch size | examples processed together |
+| `T` | time or context length | characters in a context |
+| `F` | feature count | columns, hidden features |
+| `E` | embedding width | learned numbers per token |
+| `V` | vocabulary size | possible characters or tokens |
+| `H` | hidden width | neurons in a hidden layer |
+| `C` | classes or channels | output classes, image channels |
+
+When you see:
+
+```python
+x.shape
+```
+
+do not stop at:
+
+```text
+torch.Size([2, 3])
+```
+
+Translate it:
+
+```text
+[B, F] = [2 examples, 3 features per example]
+```
+
+## The Running Tensor
+
+We will reuse this small tensor:
+
+```python
+import torch
+
+x = torch.tensor([[1, 2, 3],
+                  [4, 5, 6]])
+```
+
+Its shape is:
+
+```text
+x.shape = [2, 3]
+```
+
+Read that as:
+
+```text
+2 rows / examples
+3 columns / features
+```
+
+Its storage order is:
+
+```text
+1, 2, 3, 4, 5, 6
+```
+
+This one example is enough to understand shape, stride, views, reductions, and
+broadcasting.
+
+## Tensor Attributes
+
+PyTorch tensors have values plus metadata.
+
+The most useful attributes are:
+
+```python
+x.shape
+x.dtype
+x.device
+x.requires_grad
+```
+
+Example:
+
+```python
+x = torch.rand(2, 3)
+
+print(x.shape)         # torch.Size([2, 3])
+print(x.dtype)         # torch.float32
+print(x.device)        # cpu, cuda, or mps
+print(x.requires_grad) # False
+```
+
+What they mean:
+
+- `shape`: how many values live on each axis
+- `dtype`: what kind of numbers are stored, such as `float32` or `int64`
+- `device`: where the tensor lives, such as CPU or GPU
+- `requires_grad`: whether autograd should track operations for gradients
+
+Learnable weights are usually floating point tensors with
+`requires_grad=True`. Token ids are usually integer tensors, often
+`torch.int64`.
+
+## Tensor = Storage + Metadata
+
+A very useful mental model is:
+
+```text
+tensor = storage + metadata
+```
+
+Storage is the actual values in memory.
+
+Metadata tells PyTorch how to interpret those values:
+
+- `shape`: the logical axis sizes
+- `stride`: how far to jump in storage when moving by 1 along each axis
+- `storage_offset`: where this tensor's view starts
+
+![Storage and views](assets/03_view_storage.svg)
+
+This is why two tensors can share the same values but have different shapes.
+PyTorch can often create a new view by changing metadata instead of copying
+data.
 
 ## Stride
 
-`stride` tells PyTorch how to translate a logical index like `x[i, j]` into a
-location in memory.
+Stride tells PyTorch how to move through storage.
 
-Example:
-
-```python
-x = torch.tensor([[1, 2, 3],
-                  [4, 5, 6]])
-
-print(x.shape)   # torch.Size([2, 3])
-print(x.stride())  # (3, 1)
-```
-
-Why is the stride `(3, 1)`?
-
-- stride `3` on `dim=0` means: if you move down by one row, jump over `3` elements
-- stride `1` on `dim=1` means: if you move right by one column, jump over `1` element
-
-If we imagine the underlying storage as:
-
-```text
-[1, 2, 3, 4, 5, 6]
-```
-
-then:
-
-```text
-x[0, 0] -> offset 0*3 + 0*1 = 0 -> 1
-x[0, 2] -> offset 0*3 + 2*1 = 2 -> 3
-x[1, 0] -> offset 1*3 + 0*1 = 3 -> 4
-x[1, 2] -> offset 1*3 + 2*1 = 5 -> 6
-```
-
-That is the basic indexing rule:
-
-```text
-physical offset = sum(index_d * stride_d)
-```
-
-This is why strides matter: PyTorch can keep the same underlying data, but
-change the metadata to create different logical views.
-
-## Views
-
-A view is a tensor that shares the same underlying data with another tensor,
-but may have different metadata such as shape, stride, or offset.
-
-Row slice example:
+For:
 
 ```python
 x = torch.tensor([[1, 2, 3],
                   [4, 5, 6]])
 
-row = x[1, :]
-print(row)         # tensor([4, 5, 6])
-print(row.shape)   # torch.Size([3])
-print(row.stride())  # (1,)
+print(x.shape)    # torch.Size([2, 3])
+print(x.stride()) # (3, 1)
 ```
 
-This does not need new data. PyTorch can represent it as:
+The stride is `(3, 1)`.
 
-- same underlying storage
-- new offset starting at the `4`
-- shape `[3]`
-- stride `(1,)`
-
-Column slice example:
-
-```python
-col = x[:, 0]
-print(col)          # tensor([1, 4])
-print(col.shape)    # torch.Size([2])
-print(col.stride()) # (3,)
-```
-
-Here the elements are not adjacent in memory. They live at positions `0` and
-`3` in the underlying storage:
+Read it as:
 
 ```text
-[1, 2, 3, 4, 5, 6]
+dim 0 stride = 3: moving down one row jumps 3 values
+dim 1 stride = 1: moving right one column jumps 1 value
 ```
 
-So PyTorch represents the column view using stride `(3,)`: every step forward
-in the logical tensor jumps `3` elements in storage.
+Storage:
 
-## view and reshape
+```text
+index:   0  1  2  3  4  5
+value:   1  2  3  4  5  6
+```
 
-`view` changes the shape without changing the underlying data. This only works
-when the new shape is compatible with the existing size and stride.
+Indexing uses:
 
-Example:
+```text
+storage_offset = row_index * row_stride + col_index * col_stride
+```
+
+Examples:
+
+```text
+x[0, 0] -> 0*3 + 0*1 = 0 -> 1
+x[0, 2] -> 0*3 + 2*1 = 2 -> 3
+x[1, 0] -> 1*3 + 0*1 = 3 -> 4
+x[1, 2] -> 1*3 + 2*1 = 5 -> 6
+```
+
+You do not need to compute strides every day. But understanding them makes
+`view`, `transpose`, slicing, and contiguity much less mysterious.
+
+## Indexing And Slicing
+
+For a 2D tensor:
 
 ```python
 x = torch.tensor([[1, 2, 3],
                   [4, 5, 6]])
+```
 
+Basic indexing:
+
+```python
+x[0, 0]  # 1
+x[0, 2]  # 3
+x[1, 0]  # 4
+```
+
+Slices:
+
+```python
+x[1, :]  # tensor([4, 5, 6])
+x[:, 0]  # tensor([1, 4])
+x[:, 1:] # tensor([[2, 3],
+          #         [5, 6]])
+```
+
+How to read `:`:
+
+```text
+: means keep the whole axis
+```
+
+So:
+
+```python
+x[:, 0]
+```
+
+means:
+
+```text
+all rows, column 0
+```
+
+Shape effects:
+
+| expression | result shape | why |
+| --- | --- | --- |
+| `x[1, :]` | `[3]` | choose one row, keep columns |
+| `x[:, 0]` | `[2]` | keep rows, choose one column |
+| `x[:, 1:]` | `[2, 2]` | keep rows, keep columns 1 and 2 |
+
+Choosing a single integer index removes that axis. Slicing with `:` or `1:`
+keeps an axis.
+
+## View And Reshape
+
+`view` changes how PyTorch groups the same values.
+
+Start with:
+
+```python
+x = torch.tensor([[1, 2, 3],
+                  [4, 5, 6]])
+```
+
+The values in storage order are:
+
+```text
+1, 2, 3, 4, 5, 6
+```
+
+This works:
+
+```python
 y = x.view(6)
-print(y)         # tensor([1, 2, 3, 4, 5, 6])
-print(y.shape)   # torch.Size([6])
+print(y)
 ```
 
-This works because `x` is contiguous, so PyTorch can reinterpret the same data
-as one flat vector.
-
-A useful pattern is:
+Result:
 
 ```python
-x.view(x.shape[0], -1)
+tensor([1, 2, 3, 4, 5, 6])
+```
+
+Nothing was learned, summed, or multiplied. PyTorch just changed the grouping:
+
+```text
+[2, 3] -> [6]
+```
+
+The rule:
+
+```text
+old number of scalars must equal new number of scalars
+```
+
+So:
+
+```text
+[2, 3] has 2 * 3 = 6 values
+[6] has 6 values
+```
+
+Allowed:
+
+```text
+[2, 3] -> [6]
+[2, 3] -> [3, 2]
+[2, 3] -> [1, 6]
+```
+
+Not allowed:
+
+```text
+[2, 3] -> [4, 2]
+```
+
+because `6 != 8`.
+
+### What `-1` Means
+
+`-1` means:
+
+```text
+infer this dimension from the number of values
 ```
 
 Example:
@@ -157,48 +379,331 @@ emb = torch.tensor([
 
 print(emb.shape)  # torch.Size([2, 3, 2])
 flat = emb.view(emb.shape[0], -1)
-print(flat)
-print(flat.shape)  # torch.Size([2, 6])
+print(flat.shape) # torch.Size([2, 6])
 ```
 
-Result:
+Named axes:
+
+```text
+emb:  [B, T, E] = [2, 3, 2]
+flat: [B, T*E] = [2, 6]
+```
+
+Why:
+
+```text
+total values = 2 * 3 * 2 = 12
+keep B = 2
+remaining axis = 12 / 2 = 6
+```
+
+Output:
 
 ```python
 tensor([[ 1, 10,  2, 20,  3, 30],
         [ 4, 40,  5, 50,  6, 60]])
 ```
 
-Here:
+Memory hook:
 
-- `emb.shape[0]` keeps the batch dimension, `2`
-- `-1` means: infer the remaining size automatically
-- since each example has `3 * 2 = 6` numbers, the result is `[2, 6]`
+```text
+view redraws dividers around the same values
+```
 
-Important detail:
+### `view` vs `reshape`
 
-- `view` needs stride-compatible data
-- if the tensor is not laid out appropriately, `view` may fail
-- `reshape` is often safer because it returns a view when possible and copies when necessary
+`view` requires the tensor's stride layout to be compatible with the new shape.
+If not, it can fail.
 
-For example:
+`reshape` is more flexible:
+
+- it returns a view when possible
+- it makes a copy when needed
+
+So in practical code:
+
+```python
+x.reshape(...)
+```
+
+is often safer, while:
+
+```python
+x.view(...)
+```
+
+is useful when you know the tensor is compatible.
+
+## `dim` Means Axis
+
+Many PyTorch functions take `dim`.
+
+Read:
+
+```python
+x.sum(dim=1)
+```
+
+as:
+
+```text
+sum along axis 1
+```
+
+For:
 
 ```python
 x = torch.tensor([[1, 2, 3],
                   [4, 5, 6]])
-
-xt = x.t()
-print(xt.shape)    # torch.Size([3, 2])
-print(xt.stride()) # not the same as a contiguous [3, 2] tensor
 ```
 
-`xt` is a transposed view with different strides. It has the same numbers, but
-they are being interpreted differently.
+The axes are:
 
-## torch.cat
+```text
+dim 0 = rows
+dim 1 = columns
+```
 
-`torch.cat` concatenates tensors along an existing dimension.
+![Dim operations and broadcasting](assets/03_dim_broadcast.svg)
+
+Examples:
+
+```python
+x.sum(dim=0)  # tensor([5, 7, 9])
+x.sum(dim=1)  # tensor([ 6, 15])
+```
+
+Interpretation:
+
+- `sum(dim=0)` collapses the row axis, so columns remain
+- `sum(dim=1)` collapses the column axis, so rows remain
+
+Shape changes:
+
+```text
+x:            [2, 3]
+x.sum(dim=0): [3]
+x.sum(dim=1): [2]
+```
+
+## `keepdim=True`
+
+`keepdim=True` keeps the collapsed axis with size `1`.
+
+```python
+x.sum(dim=1, keepdim=True)
+```
+
+Shape:
+
+```text
+[2, 3] -> [2, 1]
+```
+
+Why this matters:
+
+```python
+row_sums = x.sum(dim=1, keepdim=True)
+normalized = x / row_sums
+```
+
+`row_sums` has shape `[2, 1]`, so it can broadcast across the columns of
+`x`, which has shape `[2, 3]`.
+
+If `keepdim=False`, `row_sums` would have shape `[2]`, which does not mean
+"one value per row" to broadcasting. Broadcasting compares from the right, so
+`[2]` tries to line up with the column axis of `[2, 3]`.
+
+Practical rule:
+
+```text
+when reducing an axis that you will divide by later, consider keepdim=True
+```
+
+## Softmax
+
+`softmax` turns scores into probabilities along one axis.
+
+It does not collapse the axis. It normalizes along that axis.
+
+```python
+scores = torch.tensor([[1.0, 2.0, 3.0],
+                       [4.0, 5.0, 6.0]])
+
+row_probs = torch.softmax(scores, dim=1)
+```
+
+Shape:
+
+```text
+[2, 3] -> [2, 3]
+```
+
+`dim=1` means each row becomes a probability distribution over columns.
+
+For a model output shaped:
+
+```text
+[B, V]
+```
+
+where `V` is the vocabulary or class axis, we usually use:
+
+```python
+probs = torch.softmax(logits, dim=1)
+```
+
+or equivalently:
+
+```python
+probs = torch.softmax(logits, dim=-1)
+```
+
+when the vocabulary axis is last.
+
+## Broadcasting
+
+Broadcasting lets a smaller tensor act like a larger tensor when the shapes are
+compatible.
 
 Example:
+
+```python
+a = torch.tensor([[1.0, 1.0, 1.0],
+                  [1.0, 1.0, 1.0]])
+
+b = torch.tensor([10.0, 20.0, 30.0])
+
+out = a + b
+```
+
+Shapes:
+
+```text
+a:   [2, 3]
+b:      [3]
+out: [2, 3]
+```
+
+PyTorch reads `b` as if it were:
+
+```text
+[1, 3]
+```
+
+then repeats it down the batch axis:
+
+```python
+[[10., 20., 30.],
+ [10., 20., 30.]]
+```
+
+The rules:
+
+```text
+compare shapes from the right
+dimensions are compatible if they are equal or one is 1
+missing leading dimensions behave like 1
+```
+
+Examples:
+
+| left | right | result | valid? |
+| --- | --- | --- | --- |
+| `[2, 3]` | `[3]` | `[2, 3]` | yes |
+| `[2, 3]` | `[2, 1]` | `[2, 3]` | yes |
+| `[4, 2, 3]` | `[1, 3]` | `[4, 2, 3]` | yes |
+| `[2, 3]` | `[2]` | none | no |
+
+Common uses:
+
+- adding bias: `[B, H] + [H] -> [B, H]`
+- row normalization: `[B, F] / [B, 1] -> [B, F]`
+- token plus position embeddings: `[B, T, E] + [T, E] -> [B, T, E]`
+- attention masks: `[B, heads, T, T] + [1, 1, T, T]`
+
+## Matrix Multiplication
+
+Matrix multiplication contracts the matching inner axis.
+
+![Matrix multiply and linear layer](assets/03_matmul_linear.svg)
+
+Rule:
+
+```text
+[rows, shared] @ [shared, cols] -> [rows, cols]
+```
+
+Example:
+
+```python
+x = torch.tensor([[1.0, 2.0, 3.0]])  # [1, 3]
+
+W = torch.tensor([[0.2, -0.5],
+                  [1.0,  0.3],
+                  [0.7, -0.1]])      # [3, 2]
+
+y = x @ W
+print(y.shape)  # torch.Size([1, 2])
+```
+
+Shape check:
+
+```text
+[1, 3] @ [3, 2] -> [1, 2]
+```
+
+The two `3`s match and disappear. The outside axes `1` and `2` become the
+output shape.
+
+## Linear Layers
+
+A linear layer is:
+
+```text
+y = x @ weight.T + bias
+```
+
+PyTorch stores `nn.Linear(in_features, out_features)` weights as:
+
+```text
+weight.shape = [out_features, in_features]
+bias.shape   = [out_features]
+```
+
+So if:
+
+```python
+import torch.nn as nn
+
+layer = nn.Linear(3, 2)
+x = torch.randn(5, 3)
+y = layer(x)
+
+print(x.shape)            # torch.Size([5, 3])
+print(layer.weight.shape) # torch.Size([2, 3])
+print(layer.bias.shape)   # torch.Size([2])
+print(y.shape)            # torch.Size([5, 2])
+```
+
+The math is:
+
+```text
+x:        [B, in]  = [5, 3]
+weight.T: [in,out] = [3, 2]
+bias:     [out]    = [2]
+y:        [B,out]  = [5, 2]
+```
+
+Bias broadcasts across the batch:
+
+```text
+[5, 2] + [2] -> [5, 2]
+```
+
+## `torch.cat`
+
+`torch.cat` joins tensors along an existing axis.
 
 ```python
 a = torch.tensor([[1, 2],
@@ -208,10 +713,16 @@ b = torch.tensor([[5, 6],
                   [7, 8]])
 ```
 
-Concatenate along `dim=0`:
+Concatenate along rows:
 
 ```python
 torch.cat([a, b], dim=0)
+```
+
+Shape:
+
+```text
+[2, 2] + [2, 2] -> [4, 2]
 ```
 
 Result:
@@ -223,16 +734,16 @@ tensor([[1, 2],
         [7, 8]])
 ```
 
-Shape change:
-
-```text
-[2, 2] + [2, 2] -> [4, 2]
-```
-
-Concatenate along `dim=1`:
+Concatenate along columns:
 
 ```python
 torch.cat([a, b], dim=1)
+```
+
+Shape:
+
+```text
+[2, 2] + [2, 2] -> [2, 4]
 ```
 
 Result:
@@ -242,261 +753,117 @@ tensor([[1, 2, 5, 6],
         [3, 4, 7, 8]])
 ```
 
-Shape change:
-
-```text
-[2, 2] + [2, 2] -> [2, 4]
-```
-
 Rule:
 
-- all tensors must match in every dimension except the concatenation dimension
-
-In makemore-style embedding code, this is what happens when you manually
-flatten context embeddings:
-
-```python
-emb = torch.tensor([
-    [[1, 10], [2, 20], [3, 30]],
-    [[4, 40], [5, 50], [6, 60]],
-])
-
-torch.cat([emb[:, 0, :], emb[:, 1, :], emb[:, 2, :]], dim=1)
-```
-
-Each slice:
-
-- `emb[:, 0, :]` has shape `[2, 2]`
-- `emb[:, 1, :]` has shape `[2, 2]`
-- `emb[:, 2, :]` has shape `[2, 2]`
-
-Concatenating along `dim=1` gives:
-
-```python
-tensor([[ 1, 10,  2, 20,  3, 30],
-        [ 4, 40,  5, 50,  6, 60]])
-```
-
-Shape:
-
 ```text
-[2, 6]
+all axes must match except the cat axis
 ```
 
-So `torch.cat` is a manual way to combine multiple tensor blocks side by side.
+## `torch.stack`
 
-Compare:
-
-- `torch.cat(..., dim=1)` explicitly stitches tensors together
-- `view(...)` reinterprets one compatible tensor with a new shape
-
-## Datatype
-
-`dtype` tells you what kind of numbers the tensor stores, such as
-`torch.float32` or `torch.int64`. Learnable weights are usually floats.
-
-## Requires Grad
-
-`requires_grad=True` tells PyTorch to track how the loss depends on a tensor.
-Turn it on for weights you want to learn.
-
-PyTorch does this by building a small computation graph during the forward
-pass. Each new tensor remembers which operation created it, so autograd can
-walk backward through that graph and apply the chain rule.
-
-Example:
+`torch.stack` creates a new axis.
 
 ```python
-a = torch.tensor(2.0, requires_grad=True)
-b = torch.tensor(3.0, requires_grad=True)
-x = torch.tensor(4.0, requires_grad=True)
+a = torch.tensor([1, 2, 3])
+b = torch.tensor([4, 5, 6])
 
-y = a + b
-z = x * y
-
-print(y.grad_fn)
-print(z.grad_fn)
-```
-
-Small visual:
-
-```text
-a ----\
-       (+) ---- y ----\
-b ----/               (*) ---- z
-x --------------------/
-```
-
-Here:
-
-- `y` remembers it came from `a + b`
-- `z` remembers it came from `x * y`
-- `z.grad_fn` points to the operation that created `z`
-
-That stored graph is what lets `z.backward()` send gradients back to `x`, `a`,
-and `b`.
-
-## Autograd
-
-Autograd is PyTorch's automatic differentiation system. It builds the forward
-graph, then uses the chain rule to compute gradients during `backward()`.
-
-```python
-a = torch.tensor(2.0, requires_grad=True)
-b = torch.tensor(3.0, requires_grad=True)
-
-y = a * b
-y.backward()
-
-print(a.grad)  # 3
-print(b.grad)  # 2
-```
-
-Here `y = a * b`, so:
-
-- `dy/da = b`
-- `dy/db = a`
-
-## Dim Collapse
-
-For operations like `sum` or `mean`, `dim` tells PyTorch which axis to
-collapse.
-
-If
-
-```python
-x = torch.tensor([[1, 2, 3],
-                  [4, 5, 6]])
-```
-
-then:
-
-- `x.sum(dim=0)` combines down the rows and keeps the columns: `[5, 7, 9]`
-- `x.sum(dim=1)` combines across the columns and keeps the rows: `[6, 15]`
-
-`softmax` uses `dim` too, but it does not collapse anything. It normalizes
-along that axis.
-
-```python
-x = torch.tensor([[1.0, 2.0, 3.0],
-                  [4.0, 5.0, 6.0]])
-
-row_probs = torch.softmax(x, dim=1)
-print(row_probs)
-```
-
-Example output:
-
-```python
-tensor([[0.0900, 0.2447, 0.6652],
-        [0.0900, 0.2447, 0.6652]])
-```
-
-This turns each row into a probability distribution, so each row sums to `1`.
-
-```python
-col_probs = torch.softmax(x, dim=0)
-print(col_probs)
-```
-
-Example output:
-
-```python
-tensor([[0.0474, 0.0474, 0.0474],
-        [0.9526, 0.9526, 0.9526]])
-```
-
-This turns each column into a probability distribution, so each column sums to
-`1`.
-
-## Broadcasting
-
-Broadcasting means PyTorch can apply a smaller tensor across a bigger tensor
-automatically when the shapes line up.
-
-Example:
-
-```python
-t1 = torch.tensor([[1.0, 1.0],
-                   [1.0, 1.0]])
-
-t2 = torch.tensor([2.0, 3.0])
-
-print(t1.shape)  # torch.Size([2, 2])
-print(t2.shape)  # torch.Size([2])
-
-print(t1 + t2)
+torch.stack([a, b], dim=0)
 ```
 
 Result:
 
 ```python
-tensor([[3., 4.],
-        [3., 4.]])
+tensor([[1, 2, 3],
+        [4, 5, 6]])
 ```
 
-Why this works:
+Shape:
 
-- `t1` has shape `[2, 2]`
-- `t2` has shape `[2]`, which PyTorch can read as `[1, 2]`
-- then PyTorch repeats it across rows to act like `[2, 2]`
+```text
+[3] and [3] -> [2, 3]
+```
 
-So `t2` behaves like:
+Compare:
+
+```text
+cat joins along an existing axis
+stack creates a new axis
+```
+
+## Embeddings
+
+`nn.Embedding(num_embeddings, embedding_dim)` is a learned lookup table.
+
+Terms:
+
+- token: a discrete item, such as a character or word
+- vocab size `V`: how many token ids exist
+- embedding width `E`: how many learned numbers each token gets
+
+Important: `E` means embedding width. It does not mean the character `e`.
+
+Example:
 
 ```python
-[[2., 3.],
- [2., 3.]]
+import torch
+import torch.nn as nn
+
+embedding = nn.Embedding(num_embeddings=3, embedding_dim=2)
+ids = torch.tensor([[0, 1, 2, 1]])
+
+out = embedding(ids)
+print(out.shape)
 ```
 
-Another very common example is row normalization:
+Shape:
+
+```text
+ids: [B, T]    = [1, 4]
+table: [V, E]  = [3, 2]
+out: [B, T, E] = [1, 4, 2]
+```
+
+Why the new axis appears:
+
+```text
+each scalar id becomes a vector with E learned numbers
+```
+
+For example:
+
+```text
+0 -> row 0 -> [feature 0 value, feature 1 value]
+1 -> row 1 -> [feature 0 value, feature 1 value]
+2 -> row 2 -> [feature 0 value, feature 1 value]
+```
+
+So:
+
+```text
+same [B, T] grid,
+but every cell now contains a vector of length E
+```
+
+Conceptually:
 
 ```python
-P = torch.randn(27, 27)
-row_sums = P.sum(dim=1, keepdim=True)
-
-print(P.shape)         # torch.Size([27, 27])
-print(row_sums.shape)  # torch.Size([27, 1])
-
-Q = P / row_sums
+one_hot(id) @ W
 ```
 
-Why `keepdim=True` matters:
-
-- `sum(dim=1)` means sum across columns, so you get one value per row
-- `keepdim=True` keeps the result shaped like a column: `[27, 1]`
-- `[27, 1]` can broadcast to `[27, 27]` by repeating each row sum across all columns
-
-So PyTorch treats `row_sums` like:
+and:
 
 ```python
-[[s1, s1, s1, ..., s1],
- [s2, s2, s2, ..., s2],
- ...
-]
+embedding(id)
 ```
 
-That lets each row of `P` be divided by its own row sum.
+do the same lookup. `nn.Embedding` is the efficient version.
 
-Broadcasting is very useful in LLM training:
+## `torch.gather`
 
-- adding bias in linear layers:
-  `x @ W.T + b`, where `b` has shape `[hidden]` and gets broadcast across batch and sequence positions
-- adding positional information:
-  token embeddings might have shape `[batch, time, hidden]` and positional embeddings `[time, hidden]`, which broadcast across the batch
-- attention masks:
-  an attention score tensor might be `[batch, heads, time, time]` while the mask is `[1, 1, time, time]`, which broadcasts across batches and heads
-- LayerNorm parameters:
-  learned scale and bias usually have shape `[hidden]` and broadcast across batch and time
+`torch.gather(input, dim, index)` selects values along one axis using index
+positions.
 
-Short rule:
-
-- compare shapes from the right
-- dimensions are compatible if they match, or if one of them is `1`
-
-## torch.gather
-
-`torch.gather(input, dim, index)` picks values from `input` along `dim`, using
-the positions stored in `index`.
+Example:
 
 ```python
 x = torch.tensor([[10, 20, 30],
@@ -506,7 +873,6 @@ index = torch.tensor([[2, 1],
                       [0, 2]])
 
 out = torch.gather(x, dim=1, index=index)
-print(out)
 ```
 
 Result:
@@ -516,400 +882,127 @@ tensor([[30, 20],
         [40, 60]])
 ```
 
+Read it row by row:
+
+```text
+row 0 picks columns 2 and 1 -> [30, 20]
+row 1 picks columns 0 and 2 -> [40, 60]
+```
+
+Shape rule:
+
+```text
+out.shape == index.shape
+```
+
+`gather` is useful when the index tensor says which column to pick for each
+row.
+
+## Target Indexing
+
+In classification, model probabilities often have shape:
+
+```text
+probs: [B, C]
+```
+
+where `C` is the class axis.
+
+Targets often have shape:
+
+```text
+y: [B]
+```
+
+where each value is the correct class index for that row.
+
+To pick the probability assigned to the correct class:
+
+```python
+correct_probs = probs[torch.arange(B), y]
+```
+
+Read it as:
+
+```text
+row 0, column y[0]
+row 1, column y[1]
+row 2, column y[2]
+...
+```
+
+Output shape:
+
+```text
+[B]
+```
+
+This is the same idea used in negative log likelihood:
+
+```python
+loss = -correct_probs.log().mean()
+```
+
+## Autograd
+
+Autograd is PyTorch's automatic differentiation system.
+
+If a tensor has:
+
+```python
+requires_grad=True
+```
+
+PyTorch tracks operations involving that tensor during the forward pass.
+
+Example:
+
+```python
+a = torch.tensor(2.0, requires_grad=True)
+b = torch.tensor(3.0, requires_grad=True)
+
+y = a * b
+y.backward()
+
+print(a.grad)  # tensor(3.)
+print(b.grad)  # tensor(2.)
+```
+
 Why:
 
-- row 0 picks columns `2` and `1` -> `[30, 20]`
-- row 1 picks columns `0` and `2` -> `[40, 60]`
-
-So:
-
-- `dim=1` means pick along columns
-- `dim=0` would mean pick along rows
-- `index` tells PyTorch which positions to pull from that axis
-
-## y = wx + b
-
-A linear layer starts with:
-
-```python
-y = w * x + b
+```text
+y = a * b
+dy/da = b
+dy/db = a
 ```
 
-For one input and one output, `w`, `x`, and `b` can all be scalars.
+When `a=2` and `b=3`:
 
-```python
-x = torch.tensor(4.0)
-w = torch.tensor(2.0)
-b = torch.tensor(1.0)
-
-y = w * x + b
-print(y)  # 9
+```text
+dy/da = 3
+dy/db = 2
 ```
 
-With many inputs, PyTorch does the same idea using tensor operations. The
-matrix version is:
+Autograd stores a computation graph:
 
-```python
-y = x @ w.T + b
+```text
+a ----\
+       (*) ---- y
+b ----/
 ```
 
-Example:
+Calling:
 
 ```python
-x = torch.tensor([[1.0, 2.0, 3.0]])
-
-w = torch.tensor([[0.2, -0.5, 1.0],
-                  [1.5,  0.3, -0.7]])
-
-b = torch.tensor([0.1, -0.2])
-
-y = x @ w.T + b
-print(y)
+y.backward()
 ```
 
-Here:
+walks backward through the graph and fills `.grad` on leaf tensors that require
+gradients.
 
-- `x` has shape `(1, 3)` -> one example, three input features
-- `w` has shape `(2, 3)` -> two neurons, three weights each
-- `b` has shape `(2,)` -> one bias per neuron
-- `y` has shape `(1, 2)` -> one example, two outputs
+## `nn.Parameter`
 
-## nn.Linear
-
-`nn.Linear(in_features, out_features)` is PyTorch's built-in linear layer. It
-stores `weight` and `bias` tensors and computes the same operation:
-
-```python
-y = x @ weight.T + bias
-```
-
-Example:
-
-```python
-import torch.nn as nn
-
-layer = nn.Linear(3, 2)
-x = torch.tensor([[1.0, 2.0, 3.0]])
-
-y = layer(x)
-print(y.shape)            # torch.Size([1, 2])
-print(layer.weight.shape) # torch.Size([2, 3])
-print(layer.bias.shape)   # torch.Size([2])
-```
-
-So `nn.Linear` is just a packaged version of the tensor math above.
-
-## Activation
-
-After a linear layer, you often apply an activation function. This adds
-nonlinearity, which lets the network learn more than just one big linear
-mapping.
-
-Common idea:
-
-```python
-y = activation(x @ w.T + b)
-```
-
-Example with `ReLU`:
-
-```python
-import torch
-
-x = torch.tensor([[-1.0, 2.0]])
-relu_out = torch.relu(x)
-print(relu_out)
-```
-
-Output:
-
-```python
-tensor([[0., 2.]])
-```
-
-`ReLU` keeps positive values and turns negative values into `0`.
-
-Example with a linear layer:
-
-```python
-import torch.nn as nn
-
-layer = nn.Linear(3, 2)
-x = torch.tensor([[1.0, 2.0, 3.0]])
-
-z = layer(x)
-y = torch.relu(z)
-```
-
-So the usual pattern is:
-
-- linear step: `z = x @ w.T + b`
-- activation step: `y = relu(z)`
-
-## nn.LayerNorm
-
-`nn.LayerNorm` normalizes values across the last dimension for each example. It
-is often used to keep activations in a stable range.
-
-```python
-import torch
-import torch.nn as nn
-
-x = torch.tensor([[1.0, 2.0, 3.0],
-                  [4.0, 5.0, 6.0]])
-
-layer_norm = nn.LayerNorm(3)
-y = layer_norm(x)
-print(y.shape)
-```
-
-Here:
-
-- `x.shape` is `[2, 3]`
-- each row has 3 numbers
-- `nn.LayerNorm(3)` means: normalize groups of 3 numbers at a time
-
-So `layer_norm(x)` normalizes each row separately:
-
-- `[1, 2, 3]` becomes roughly `[-1.22, 0.00, 1.22]`
-- `[4, 5, 6]` becomes roughly `[-1.22, 0.00, 1.22]`
-
-`y.shape` stays the same as `x.shape`, so:
-
-```python
-torch.Size([2, 3])
-```
-
-LayerNorm changes the values, not the shape.
-
-## nn.Dropout
-
-`nn.Dropout(p)` randomly zeros some values during training. It is used as a
-regularizer so the model does not rely too much on any single feature.
-
-```python
-import torch
-import torch.nn as nn
-
-x = torch.tensor([[1.0, 1.0, 1.0, 1.0]])
-dropout = nn.Dropout(p=0.5)
-
-y = dropout(x)  # training mode
-print(y)
-```
-
-Possible output:
-
-```python
-tensor([[0., 2., 0., 2.]])
-```
-
-With `p=0.5`:
-
-- each value has a 50% chance of becoming `0`
-- kept values are scaled up
-
-During evaluation, dropout is turned off.
-
-## nn.Softmax
-
-`nn.Softmax(dim=...)` is the module version of `torch.softmax`. It turns values
-into probabilities along a chosen axis.
-
-```python
-import torch
-import torch.nn as nn
-
-logits = torch.log(torch.tensor([[1.0, 1.0, 1.0],
-                                 [1.0, 1.0, 2.0],
-                                 [1.0, 3.0, 1.0],
-                                 [2.0, 2.0, 1.0]]))
-
-softmax = nn.Softmax(dim=-1)
-
-y = softmax(logits)
-print(y)
-```
-
-Output:
-
-```python
-tensor([[0.3333, 0.3333, 0.3333],
-        [0.2500, 0.2500, 0.5000],
-        [0.2000, 0.6000, 0.2000],
-        [0.4000, 0.4000, 0.2000]])
-```
-
-This example has:
-
-- `4` inputs -> 4 rows
-- `3` classes -> 3 columns
-
-Why this is easy to compute manually:
-
-- `softmax` applies `exp(...)`
-- here the inputs are logs, so `exp(log(k)) = k`
-- each row becomes simple normalization
-
-So the rows are:
-
-- `[1, 1, 1] / 3 -> [1/3, 1/3, 1/3]`
-- `[1, 1, 2] / 4 -> [1/4, 1/4, 1/2]`
-- `[1, 3, 1] / 5 -> [1/5, 3/5, 1/5]`
-- `[2, 2, 1] / 5 -> [2/5, 2/5, 1/5]`
-
-Why `dim=-1`:
-
-- `-1` means the last axis
-- for shape `[4, 3]`, the last axis is the class axis
-- so each row becomes a probability distribution over the 3 classes
-
-For a 2D tensor shaped `[batch, classes]`, `dim=-1` and `dim=1` mean the same
-thing.
-
-## nn.Embedding
-
-`nn.Embedding(num_embeddings, embedding_dim)` maps integer ids to learned dense
-vectors.
-
-Important terms:
-
-- `token`: one discrete item, such as a character or a word
-- `vocab`: the full set of allowed tokens
-- `vocab_size`: how many tokens are in the vocab
-- `embedding_dim`: how many numbers each token vector contains
-
-Character example:
-
-```python
-import torch
-import torch.nn as nn
-
-stoi = {"a": 0, "b": 1, "c": 2}
-
-vocab_size = 3
-embedding_dim = 2
-
-embedding_layer = nn.Embedding(vocab_size, embedding_dim)
-
-ids = torch.tensor([[0, 1, 2, 1]])  # "abcb"
-out = embedding_layer(ids)
-
-print(out.shape)
-```
-
-Output shape:
-
-```python
-torch.Size([1, 4, 2])
-```
-
-Here:
-
-- tokens are the characters `a`, `b`, `c`
-- `vocab_size = 3` because there are 3 possible character tokens
-- `embedding_dim = 2` because each character gets 2 learned numbers
-- input shape `[1, 4]` means 1 sequence with 4 character ids
-- output shape `[1, 4, 2]` means each character id became a 2D vector
-
-Example output shape:
-
-```python
-[
-  [
-    [0.2, -0.5],   # token 0 -> "a"
-    [1.1,  0.3],   # token 1 -> "b"
-    [-0.7, 2.0],   # token 2 -> "c"
-    [1.1,  0.3]    # token 1 -> "b" again
-  ]
-]
-```
-
-The outer `1` is the batch, the `4` is the sequence length, and the final `2`
-is the size of each embedding vector.
-
-You can think of the embedding as a trainable table of shape `[3, 2]`:
-
-```python
-row 0 -> vector for "a"
-row 1 -> vector for "b"
-row 2 -> vector for "c"
-```
-
-So:
-
-- id `0` picks the row for `"a"`
-- id `1` picks the row for `"b"`
-- id `2` picks the row for `"c"`
-
-`embedding_layer(ids)` means: look up the row for each id and return those
-vectors in the same sequence order.
-
-For `"abcb"`:
-
-```python
-[0, 1, 2, 1]
-```
-
-becomes:
-
-```python
-[vec("a"), vec("b"), vec("c"), vec("b")]
-```
-
-Word example:
-
-```python
-stoi = {"i": 0, "love": 1, "pytorch": 2}
-
-embedding_layer = nn.Embedding(3, 4)
-
-sentence_ids = torch.tensor([[0, 1, 2]])
-word_vectors = embedding_layer(sentence_ids)
-
-print(word_vectors.shape)
-```
-
-Output shape:
-
-```python
-torch.Size([1, 3, 4])
-```
-
-Here:
-
-- the token is now a word
-- `vocab_size = 3` because there are 3 word tokens in this tiny vocab
-- `embedding_dim = 4` because each word gets a vector of length 4
-- `embedding_layer(sentence_ids)` returns one 4-number vector per word
-
-In larger language models, a token is often a subword piece instead of a full
-word, but the lookup idea is the same.
-
-One-hot comparison:
-
-- one-hot for `"b"` in vocab `["a", "b", "c"]` is `[0, 1, 0]`
-- that vector is sparse and mostly zeros
-- an embedding replaces it with a learned dense vector such as `[1.1, 0.3]`
-
-Conceptually:
-
-```python
-one_hot(token_id) @ W
-```
-
-and
-
-```python
-embedding_layer(token_id)
-```
-
-do the same lookup. `nn.Embedding` is just the efficient learned-table version.
-
-## nn.Parameter
-
-`nn.Parameter` is a tensor that PyTorch treats as a learnable model parameter
-inside an `nn.Module`.
+`nn.Parameter` is a tensor that an `nn.Module` treats as learnable.
 
 ```python
 import torch.nn as nn
@@ -918,51 +1011,24 @@ p = nn.Parameter(torch.randn(3, 4))
 print(p.requires_grad)  # True
 ```
 
-Why use it:
+Use:
 
-- a plain tensor is just data
-- an `nn.Parameter` is registered as part of the model
-- optimizers will update registered parameters during training
+- plain tensors for ordinary data
+- `nn.Parameter` for weights that should be learned
 
-So in practice:
+Most of the time, you do not create `nn.Parameter` directly. Layers like
+`nn.Linear` create parameters for you.
 
-- use plain tensors for ordinary values
-- use `nn.Parameter` for weights and biases you want the model to learn
+## `nn.Module`
 
-## Manual Update vs nn.Module
+`nn.Module` is PyTorch's standard container for a model.
 
-From scratch, you might create loose tensors and update them yourself:
+It has two main jobs:
 
-```python
-W = torch.randn(1, 1, requires_grad=True)
-b = torch.zeros(1, requires_grad=True)
-
-loss.backward()
-
-with torch.no_grad():
-    W -= learning_rate * W.grad
-    b -= learning_rate * b.grad
-
-W.grad.zero_()
-b.grad.zero_()
+```text
+__init__: define layers and parameters
+forward: define how input flows through them
 ```
-
-This works, but it does not scale. If you have many layers, you do not want to
-manually update and zero every tensor one by one.
-
-The cleaner approach is:
-
-- `nn.Module` organizes the model and its parameters
-- `torch.optim` updates all registered parameters for you
-
-## nn.Module
-
-`nn.Module` is the standard PyTorch container for a model.
-
-Think of it as:
-
-- `__init__`: define the layers
-- `forward`: define how data flows through those layers
 
 Example:
 
@@ -970,97 +1036,255 @@ Example:
 import torch
 import torch.nn as nn
 
-class LinearRegressionModel(nn.Module):
-    def __init__(self, in_features, out_features):
+class TinyModel(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.linear_layer = nn.Linear(in_features, out_features)
+        self.linear = nn.Linear(3, 2)
 
     def forward(self, x):
-        return self.linear_layer(x)
+        return self.linear(x)
 ```
 
 Build it:
 
 ```python
-model = LinearRegressionModel(in_features=1, out_features=1)
+model = TinyModel()
 print(model)
 ```
 
-Output:
+Why `nn.Module` matters:
 
-```python
-LinearRegressionModel(
-  (linear_layer): Linear(in_features=1, out_features=1, bias=True)
-)
-```
+- it stores layers in one object
+- it registers parameters automatically
+- `model.parameters()` can find every learnable tensor
+- optimizers can update those parameters
 
-Why this is better than loose tensors:
+## `torch.optim`
 
-- the weights and biases are stored inside the model
-- `model.parameters()` can find them automatically
-- you no longer manage each parameter by hand
-
-## torch.optim
-
-`torch.optim` contains optimizers such as SGD and Adam. An optimizer takes
-`model.parameters()` and knows how to update all of them.
-
-Example:
+An optimizer updates model parameters using gradients.
 
 ```python
 import torch.optim as optim
 
-learning_rate = 0.01
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-loss_fn = nn.MSELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 ```
 
-Here:
-
-- `model.parameters()` gives the optimizer every learnable parameter
-- `optimizer` handles the weight updates
-- `loss_fn` computes the training loss
+The optimizer does not compute gradients. It only uses gradients that already
+exist on parameters.
 
 ## The Standard Training Step
 
-With `nn.Module` and `torch.optim`, the core loop becomes:
+![Standard training step](assets/03_training_step.svg)
+
+The usual loop is:
 
 ```python
+pred = model(x)
+loss = loss_fn(pred, y)
+
 optimizer.zero_grad()
 loss.backward()
 optimizer.step()
 ```
 
-What each line means:
+What each line does:
 
-- `optimizer.zero_grad()`: clear old gradients from the previous step
-- `loss.backward()`: compute new gradients for all model parameters
-- `optimizer.step()`: update all model parameters using those gradients
+| line | job |
+| --- | --- |
+| `pred = model(x)` | forward pass |
+| `loss = loss_fn(pred, y)` | compare prediction to target |
+| `optimizer.zero_grad()` | clear old gradients |
+| `loss.backward()` | compute new gradients |
+| `optimizer.step()` | update parameters |
 
-This replaces the manual version:
+Why `zero_grad()` comes before `backward()`:
 
-```python
-with torch.no_grad():
-    W -= learning_rate * W.grad
-    b -= learning_rate * b.grad
-
-W.grad.zero_()
-b.grad.zero_()
+```text
+PyTorch accumulates gradients by default
 ```
 
-Same idea, better packaging.
+If you forget to clear gradients, the next backward pass adds new gradients on
+top of old gradients.
+
+## Common Neural Network Layers
+
+### Activation
+
+An activation function changes values while usually keeping shape the same.
+
+Example:
+
+```python
+x = torch.tensor([[-1.0, 2.0]])
+torch.relu(x)
+```
+
+Output:
+
+```python
+tensor([[0., 2.]])
+```
+
+Shape:
+
+```text
+[1, 2] -> [1, 2]
+```
+
+`ReLU` keeps positive values and turns negative values into `0`.
+
+### LayerNorm
+
+`nn.LayerNorm` normalizes across the last axis by default.
+
+```python
+x = torch.tensor([[1.0, 2.0, 3.0],
+                  [4.0, 5.0, 6.0]])
+
+layer_norm = nn.LayerNorm(3)
+y = layer_norm(x)
+```
+
+Shape:
+
+```text
+[2, 3] -> [2, 3]
+```
+
+It changes values, not shape.
+
+For `[B, F]`, `nn.LayerNorm(F)` normalizes each example's `F` features.
+
+For `[B, T, H]`, `nn.LayerNorm(H)` normalizes each token's hidden vector.
+
+### Dropout
+
+`nn.Dropout(p)` randomly zeros values during training.
+
+```python
+dropout = nn.Dropout(p=0.5)
+y = dropout(x)
+```
+
+Shape:
+
+```text
+same as input
+```
+
+Dropout changes values, not shape. During evaluation, dropout is turned off.
+
+### Softmax Module
+
+`nn.Softmax(dim=...)` is the module version of `torch.softmax`.
+
+```python
+softmax = nn.Softmax(dim=-1)
+y = softmax(logits)
+```
+
+For logits shaped `[B, C]`, `dim=-1` normalizes over classes.
+
+## Shape Debugging Checklist
+
+When a PyTorch expression feels confusing, slow down and write:
+
+```text
+name: shape = axis meanings
+```
+
+Example:
+
+```text
+ids:    [B, T]    = token ids
+C:      [V, E]    = embedding table
+emb:    [B, T, E] = token vectors
+flat:   [B, T*E]  = one feature row per example
+W1:     [T*E, H]  = first linear weights
+h:      [B, H]    = hidden features
+logits: [B, V]    = one score per next token
+```
+
+Then ask:
+
+```text
+Is an axis being selected?
+Is an axis being collapsed?
+Is an axis being created?
+Are two axes being merged?
+Are two tensors being aligned from the right?
+Are inner matmul axes equal?
+```
+
+This catches most beginner PyTorch shape bugs.
+
+## Quick Recall Checks
+
+Try these without looking back.
+
+1. `x.shape = [2, 3]`. What is `x.sum(dim=1).shape`?
+2. `x.shape = [2, 3]`. What is `x.sum(dim=1, keepdim=True).shape`?
+3. `emb.shape = [32, 3, 10]`. What is `emb.view(32, -1).shape`?
+4. `a.shape = [4, 5]`, `b.shape = [5]`. What is `(a + b).shape`?
+5. `x.shape = [8, 16]`, `W.shape = [16, 32]`. What is `(x @ W).shape`?
+6. `ids.shape = [4, 7]`, embedding table shape is `[27, 12]`. What is the embedding output shape?
+
+<details>
+<summary>Answers</summary>
+
+1. `[2]`
+2. `[2, 1]`
+3. `[32, 30]`
+4. `[4, 5]`
+5. `[8, 32]`
+6. `[4, 7, 12]`
+
+</details>
 
 ## Easy Memory Hook
 
-Use this picture:
+Use this map:
 
-- `nn.Module` = the organized model blueprint
-- `nn.Parameter` = the learnable tensors inside it
-- `torch.optim` = the tool that updates those parameters
+```text
+Tensor basics:
+  shape = axis sizes
+  dtype = number type
+  device = where it lives
 
-So the full story is:
+Shape operations:
+  index selects
+  sum/mean collapse
+  softmax normalizes
+  view/reshape regroup
+  cat joins
+  stack creates
+  broadcast expands virtually
+  matmul contracts inner axes
 
-1. Put layers inside an `nn.Module`.
-2. PyTorch registers their parameters.
-3. Pass `model.parameters()` to an optimizer.
-4. Run `zero_grad()`, `backward()`, `step()`.
+Training:
+  Module stores parameters
+  loss measures error
+  backward computes gradients
+  optimizer updates parameters
+```
+
+## References
+
+PyTorch references:
+
+- Tensors tutorial: https://docs.pytorch.org/tutorials/beginner/basics/tensor_tutorial
+- Tensor views: https://docs.pytorch.org/docs/main/tensor_view.html
+- Broadcasting semantics: https://docs.pytorch.org/docs/2.9/notes/broadcasting.html
+- Named tensors: https://docs.pytorch.org/docs/stable/named_tensor.html
+- `torch.matmul`: https://docs.pytorch.org/docs/stable/generated/torch.matmul
+- `torch.cat`: https://docs.pytorch.org/docs/stable/generated/torch.cat
+- `torch.gather`: https://docs.pytorch.org/docs/stable/generated/torch.gather.html
+
+Learning-design references used for this rewrite:
+
+- worked examples and cognitive load:
+  https://www.mdpi.com/2227-7102/14/8/813
+- retrieval practice:
+  https://link.springer.com/article/10.1007/s10648-021-09595-9
+- spaced retrieval in math learning:
+  https://link.springer.com/article/10.1007/s10648-022-09677-2

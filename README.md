@@ -25,6 +25,8 @@ judgment, and technical writing.
 - `docs/02_makemore_bigrams_notes.md`: lecture 2 short bigram note
 - `docs/04_makemore_mlp_notes.md`: part 2 note on why count tables do not scale to longer context
 - `docs/03_pytorch_basics.md`: short PyTorch basics note
+- `docs/rl_additional_resources.md`: filtered RL watch order for RLHF and LLM tuning
+- `docs/state-rl.md`: shortlist of promising RL, world-model, and planning project ideas
 
 ## Quick start
 

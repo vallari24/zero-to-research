@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 520" role="img" aria-labelledby="title desc">
+  <title id="title">Bigram table and row normalization</title>
+  <desc id="desc">A diagram showing current characters as rows, next characters as columns, then row normalization into probabilities.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #fff; stroke: #d7dce2; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .grid { fill: #f8fafc; stroke: #aeb8c5; stroke-width: 1; }
+      .hi { fill: #fef3c7; stroke: #d97706; stroke-width: 1.2; }
+      .line { stroke: #66758a; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1120" height="520" rx="18"/>
+  <text x="42" y="48" class="label ink">Bigram table</text>
+  <text x="42" y="76" class="text muted">Rows choose the current character.</text>
+  <text x="42" y="101" class="text muted">Columns store possible next characters.</text>
+  <text x="42" y="124" class="text muted">Normalize each row to get probabilities.</text>
+
+  <rect x="54" y="158" width="330" height="265" rx="10" class="panel"/>
+  <text x="82" y="191" class="text blue">counts N: [27, 27]</text>
+  <g transform="translate(110 227)">
+    <text x="-52" y="24" class="small muted">row</text>
+    <text x="65" y="-14" class="small muted">next char columns</text>
+    <rect x="0" y="0" width="192" height="144" class="grid"/>
+    <line x1="0" y1="36" x2="192" y2="36" stroke="#d0d7df"/>
+    <line x1="0" y1="72" x2="192" y2="72" stroke="#d0d7df"/>
+    <line x1="0" y1="108" x2="192" y2="108" stroke="#d0d7df"/>
+    <line x1="48" y1="0" x2="48" y2="144" stroke="#d0d7df"/>
+    <line x1="96" y1="0" x2="96" y2="144" stroke="#d0d7df"/>
+    <line x1="144" y1="0" x2="144" y2="144" stroke="#d0d7df"/>
+    <rect x="0" y="0" width="192" height="36" class="hi"/>
+    <text x="16" y="24" class="small ink">.</text>
+    <text x="65" y="24" class="small ink">a</text>
+    <text x="113" y="24" class="small ink">b</text>
+    <text x="161" y="24" class="small ink">c</text>
+  </g>
+  <text x="82" y="395" class="small muted">one row asks: what comes next?</text>
+
+  <path d="M405 287 L475 287" class="line"/>
+
+  <rect x="495" y="158" width="260" height="265" rx="10" class="panel"/>
+  <text x="525" y="191" class="text green">row totals: [27, 1]</text>
+  <text x="525" y="219" class="small muted">sum across columns</text>
+  <g transform="translate(570 255)">
+    <rect x="0" y="0" width="106" height="36" rx="6" class="grid"/>
+    <rect x="0" y="50" width="106" height="36" rx="6" class="grid"/>
+    <rect x="0" y="100" width="106" height="36" rx="6" class="grid"/>
+    <text x="24" y="24" class="small ink">sum 0</text>
+    <text x="24" y="74" class="small ink">sum 1</text>
+    <text x="24" y="124" class="small ink">sum 2</text>
+  </g>
+  <text x="525" y="395" class="small muted">keepdim keeps column shape</text>
+
+  <path d="M775 287 L845 287" class="line"/>
+
+  <rect x="865" y="158" width="205" height="265" rx="10" class="panel"/>
+  <text x="895" y="191" class="text orange">P: [27, 27]</text>
+  <text x="895" y="219" class="small muted">probability rows</text>
+  <g transform="translate(895 255)">
+    <rect x="0" y="0" width="130" height="38" rx="6" class="hi"/>
+    <rect x="0" y="58" width="130" height="38" rx="6" class="hi"/>
+    <text x="20" y="25" class="small ink">.10  .30</text>
+    <text x="20" y="83" class="small ink">.05  .95</text>
+  </g>
+  <text x="895" y="368" class="small muted">each row sums to 1</text>
+  <text x="895" y="391" class="small muted">sample from one row</text>
+</svg>

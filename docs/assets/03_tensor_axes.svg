@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
+  <title id="title">Tensor axes and shapes</title>
+  <desc id="desc">A compact guide to reading tensors by named axes.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #fff; stroke: #d7dce2; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .cell { fill: #eef2ff; stroke: #8ea2d8; stroke-width: 1.1; }
+      .cell2 { fill: #ecfdf5; stroke: #7dc8a2; stroke-width: 1.1; }
+      .cell3 { fill: #fff7ed; stroke: #e6a155; stroke-width: 1.1; }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+  </defs>
+  <rect class="bg" width="960" height="420" rx="18"/>
+  <text x="38" y="48" class="label ink">A tensor shape is a list of axis sizes</text>
+  <text x="38" y="78" class="text muted">Name the axes before reading the numbers.</text>
+
+  <rect x="45" y="120" width="180" height="210" rx="10" class="panel"/>
+  <text x="70" y="154" class="label blue">scalar</text>
+  <text x="70" y="186" class="text ink">shape []</text>
+  <rect x="92" y="225" width="62" height="44" rx="6" class="cell"/>
+  <text x="112" y="253" class="text ink">7</text>
+  <text x="70" y="305" class="small muted">one number</text>
+
+  <rect x="270" y="120" width="180" height="210" rx="10" class="panel"/>
+  <text x="295" y="154" class="label green">vector</text>
+  <text x="295" y="186" class="text ink">shape [F]</text>
+  <g transform="translate(300 225)">
+    <rect x="0" y="0" width="36" height="44" class="cell2"/>
+    <rect x="36" y="0" width="36" height="44" class="cell2"/>
+    <rect x="72" y="0" width="36" height="44" class="cell2"/>
+    <text x="13" y="28" class="small ink">1</text>
+    <text x="49" y="28" class="small ink">2</text>
+    <text x="85" y="28" class="small ink">3</text>
+  </g>
+  <text x="295" y="305" class="small muted">F = features</text>
+
+  <rect x="495" y="120" width="180" height="210" rx="10" class="panel"/>
+  <text x="520" y="154" class="label orange">matrix</text>
+  <text x="520" y="186" class="text ink">shape [B,F]</text>
+  <g transform="translate(530 220)">
+    <rect x="0" y="0" width="42" height="34" class="cell3"/>
+    <rect x="42" y="0" width="42" height="34" class="cell3"/>
+    <rect x="84" y="0" width="42" height="34" class="cell3"/>
+    <rect x="0" y="34" width="42" height="34" class="cell3"/>
+    <rect x="42" y="34" width="42" height="34" class="cell3"/>
+    <rect x="84" y="34" width="42" height="34" class="cell3"/>
+  </g>
+  <text x="520" y="305" class="small muted">B rows, F columns</text>
+
+  <rect x="720" y="120" width="195" height="210" rx="10" class="panel"/>
+  <text x="745" y="154" class="label blue">3D tensor</text>
+  <text x="745" y="186" class="text ink">shape [B,T,F]</text>
+  <g transform="translate(750 222)">
+    <rect x="0" y="0" width="48" height="34" rx="5" class="cell"/>
+    <rect x="58" y="0" width="48" height="34" rx="5" class="cell"/>
+    <rect x="116" y="0" width="48" height="34" rx="5" class="cell"/>
+    <rect x="14" y="55" width="48" height="34" rx="5" class="cell2"/>
+    <rect x="72" y="55" width="48" height="34" rx="5" class="cell2"/>
+    <rect x="130" y="55" width="48" height="34" rx="5" class="cell2"/>
+  </g>
+  <text x="745" y="324" class="small muted">B examples, T steps</text>
+  <text x="745" y="346" class="small muted">F features</text>
+</svg>

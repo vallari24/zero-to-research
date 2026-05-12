@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500" role="img" aria-labelledby="title desc">
+  <title id="title">Storage, stride, and views</title>
+  <desc id="desc">A diagram showing one storage tape interpreted as a 2 by 3 matrix and as a flat vector.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #fff; stroke: #d7dce2; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .tape { fill: #eef2ff; stroke: #8ea2d8; stroke-width: 1.1; }
+      .mat { fill: #ecfdf5; stroke: #7dc8a2; stroke-width: 1.1; }
+      .flat { fill: #fff7ed; stroke: #e6a155; stroke-width: 1.1; }
+      .line { stroke: #66758a; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="960" height="500" rx="18"/>
+  <text x="38" y="48" class="label ink">tensor = storage + metadata</text>
+  <text x="38" y="78" class="text muted">Views reuse values with new metadata.</text>
+
+  <rect x="60" y="118" width="840" height="90" rx="10" class="panel"/>
+  <text x="85" y="148" class="text blue">storage tape</text>
+  <g transform="translate(85 163)">
+    <rect x="0" y="0" width="54" height="30" class="tape"/><text x="22" y="21" class="small ink">1</text>
+    <rect x="54" y="0" width="54" height="30" class="tape"/><text x="76" y="21" class="small ink">2</text>
+    <rect x="108" y="0" width="54" height="30" class="tape"/><text x="130" y="21" class="small ink">3</text>
+    <rect x="162" y="0" width="54" height="30" class="tape"/><text x="184" y="21" class="small ink">4</text>
+    <rect x="216" y="0" width="54" height="30" class="tape"/><text x="238" y="21" class="small ink">5</text>
+    <rect x="270" y="0" width="54" height="30" class="tape"/><text x="292" y="21" class="small ink">6</text>
+  </g>
+
+  <path d="M260 226 L260 265" class="line"/>
+  <path d="M685 226 L685 265" class="line"/>
+
+  <rect x="90" y="280" width="340" height="150" rx="10" class="panel"/>
+  <text x="115" y="313" class="label green">shape [2,3]</text>
+  <text x="115" y="340" class="small muted">stride (3,1): row jump 3, col jump 1</text>
+  <g transform="translate(150 362)">
+    <rect x="0" y="0" width="54" height="34" class="mat"/><text x="22" y="23" class="small ink">1</text>
+    <rect x="54" y="0" width="54" height="34" class="mat"/><text x="76" y="23" class="small ink">2</text>
+    <rect x="108" y="0" width="54" height="34" class="mat"/><text x="130" y="23" class="small ink">3</text>
+    <rect x="0" y="34" width="54" height="34" class="mat"/><text x="22" y="57" class="small ink">4</text>
+    <rect x="54" y="34" width="54" height="34" class="mat"/><text x="76" y="57" class="small ink">5</text>
+    <rect x="108" y="34" width="54" height="34" class="mat"/><text x="130" y="57" class="small ink">6</text>
+  </g>
+
+  <rect x="530" y="280" width="340" height="150" rx="10" class="panel"/>
+  <text x="555" y="313" class="label orange">view [6]</text>
+  <text x="555" y="340" class="small muted">same storage, one flat axis</text>
+  <g transform="translate(585 374)">
+    <rect x="0" y="0" width="44" height="34" class="flat"/><text x="17" y="23" class="small ink">1</text>
+    <rect x="44" y="0" width="44" height="34" class="flat"/><text x="61" y="23" class="small ink">2</text>
+    <rect x="88" y="0" width="44" height="34" class="flat"/><text x="105" y="23" class="small ink">3</text>
+    <rect x="132" y="0" width="44" height="34" class="flat"/><text x="149" y="23" class="small ink">4</text>
+    <rect x="176" y="0" width="44" height="34" class="flat"/><text x="193" y="23" class="small ink">5</text>
+    <rect x="220" y="0" width="44" height="34" class="flat"/><text x="237" y="23" class="small ink">6</text>
+  </g>
+</svg>

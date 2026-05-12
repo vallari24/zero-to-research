@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 480" role="img" aria-labelledby="title desc">
+  <title id="title">BatchNorm flow</title>
+  <desc id="desc">A diagram showing batch statistics, normalization, and learned scale and shift.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #fff; stroke: #d7dce2; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .line { stroke: #66758a; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .bar1 { fill: #c7d2fe; }
+      .bar2 { fill: #86efac; }
+      .bar3 { fill: #fdba74; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="980" height="480" rx="18"/>
+  <text x="38" y="48" class="label ink">BatchNorm normalizes then rescales</text>
+  <text x="38" y="78" class="text muted">Compute batch statistics.</text>
+  <text x="38" y="103" class="text muted">Then apply learned scale and shift.</text>
+
+  <rect x="54" y="125" width="220" height="240" rx="10" class="panel"/>
+  <text x="78" y="158" class="text blue">before</text>
+  <g transform="translate(92 190)">
+    <rect x="0" y="80" width="22" height="30" class="bar1"/><rect x="30" y="60" width="22" height="50" class="bar1"/>
+    <rect x="60" y="40" width="22" height="70" class="bar1"/><rect x="90" y="20" width="22" height="90" class="bar1"/>
+    <rect x="120" y="50" width="22" height="60" class="bar1"/>
+  </g>
+  <text x="78" y="332" class="small muted">spread out</text>
+
+  <path d="M288 245 L356 245" class="line"/>
+
+  <rect x="370" y="125" width="220" height="240" rx="10" class="panel"/>
+  <text x="394" y="158" class="text green">normalize</text>
+  <g transform="translate(408 190)">
+    <rect x="0" y="55" width="22" height="55" class="bar2"/><rect x="30" y="42" width="22" height="68" class="bar2"/>
+    <rect x="60" y="30" width="22" height="80" class="bar2"/><rect x="90" y="45" width="22" height="65" class="bar2"/>
+    <rect x="120" y="50" width="22" height="60" class="bar2"/>
+  </g>
+  <text x="394" y="332" class="small muted">centered and scaled</text>
+
+  <path d="M605 245 L672 245" class="line"/>
+
+  <rect x="686" y="125" width="240" height="240" rx="10" class="panel"/>
+  <text x="710" y="158" class="text orange">scale + shift</text>
+  <g transform="translate(724 190)">
+    <rect x="0" y="60" width="22" height="50" class="bar3"/><rect x="30" y="40" width="22" height="70" class="bar3"/>
+    <rect x="60" y="20" width="22" height="90" class="bar3"/><rect x="90" y="35" width="22" height="75" class="bar3"/>
+    <rect x="120" y="50" width="22" height="60" class="bar3"/>
+  </g>
+  <text x="710" y="332" class="small muted">gamma and beta are learnable</text>
+</svg>

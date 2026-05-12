@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500" role="img" aria-labelledby="title desc">
+  <title id="title">Dim operations and broadcasting</title>
+  <desc id="desc">A diagram showing dim 0, dim 1, keepdim, and broadcasting.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #fff; stroke: #d7dce2; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .cell { fill: #eef2ff; stroke: #8ea2d8; stroke-width: 1.1; }
+      .sum { fill: #ecfdf5; stroke: #7dc8a2; stroke-width: 1.1; }
+      .bcast { fill: #fff7ed; stroke: #e6a155; stroke-width: 1.1; }
+      .line { stroke: #66758a; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="960" height="500" rx="18"/>
+  <text x="38" y="48" class="label ink">dim chooses the axis</text>
+  <text x="38" y="78" class="text muted">Some ops collapse an axis.</text>
+  <text x="38" y="103" class="text muted">Some ops normalize along it.</text>
+
+  <rect x="60" y="122" width="245" height="250" rx="10" class="panel"/>
+  <text x="85" y="155" class="label blue">x [2,3]</text>
+  <g transform="translate(95 200)">
+    <rect x="0" y="0" width="54" height="36" class="cell"/><text x="22" y="24" class="small ink">1</text>
+    <rect x="54" y="0" width="54" height="36" class="cell"/><text x="76" y="24" class="small ink">2</text>
+    <rect x="108" y="0" width="54" height="36" class="cell"/><text x="130" y="24" class="small ink">3</text>
+    <rect x="0" y="36" width="54" height="36" class="cell"/><text x="22" y="60" class="small ink">4</text>
+    <rect x="54" y="36" width="54" height="36" class="cell"/><text x="76" y="60" class="small ink">5</text>
+    <rect x="108" y="36" width="54" height="36" class="cell"/><text x="130" y="60" class="small ink">6</text>
+  </g>
+  <text x="85" y="315" class="small muted">dim 0: down rows</text>
+  <text x="85" y="338" class="small muted">dim 1: across columns</text>
+
+  <path d="M330 230 L405 230" class="line"/>
+  <rect x="430" y="122" width="210" height="250" rx="10" class="panel"/>
+  <text x="455" y="155" class="label green">sum dim=1</text>
+  <text x="455" y="183" class="small muted">collapse columns</text>
+  <g transform="translate(500 220)">
+    <rect x="0" y="0" width="58" height="36" class="sum"/><text x="22" y="24" class="small ink">6</text>
+    <rect x="0" y="52" width="58" height="36" class="sum"/><text x="18" y="76" class="small ink">15</text>
+  </g>
+  <text x="455" y="338" class="small muted">shape [2]</text>
+
+  <path d="M660 230 L735 230" class="line"/>
+  <rect x="760" y="122" width="155" height="250" rx="10" class="panel"/>
+  <text x="785" y="155" class="label orange">keepdim</text>
+  <text x="785" y="183" class="small muted">shape [2,1]</text>
+  <g transform="translate(805 220)">
+    <rect x="0" y="0" width="58" height="36" class="bcast"/><text x="22" y="24" class="small ink">6</text>
+    <rect x="0" y="52" width="58" height="36" class="bcast"/><text x="18" y="76" class="small ink">15</text>
+  </g>
+  <text x="785" y="338" class="small muted">can broadcast</text>
+  <text x="785" y="360" class="small muted">across columns</text>
+</svg>

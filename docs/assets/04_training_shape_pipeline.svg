@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 380" role="img" aria-labelledby="title desc">
+  <title id="title">Makemore MLP shape pipeline</title>
+  <desc id="desc">A full shape pipeline from character contexts to embeddings, flattening, hidden layer, logits, probabilities, and loss.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .box { fill: #ffffff; stroke: #d7dce2; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .red { fill: #dc2626; }
+      .line { stroke: #66758a; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1040" height="380" rx="18"/>
+  <text x="38" y="45" class="label ink">One forward pass, with every shape named</text>
+  <text x="38" y="72" class="text muted">Keep batch axis B alive left to right.</text>
+  <text x="38" y="95" class="text muted">Track what every axis means.</text>
+
+  <g transform="translate(38 128)">
+    <rect x="0" y="0" width="110" height="86" rx="9" class="box"/>
+    <text x="20" y="30" class="label blue">X</text>
+    <text x="20" y="55" class="text ink">[B,T]</text>
+    <text x="20" y="75" class="small muted">ids</text>
+
+    <path d="M122 43 L172 43" class="line"/>
+    <text x="124" y="25" class="small muted">C[X]</text>
+
+    <rect x="184" y="0" width="124" height="86" rx="9" class="box"/>
+    <text x="204" y="30" class="label green">emb</text>
+    <text x="204" y="55" class="text ink">[B,T,E]</text>
+    <text x="204" y="75" class="small muted">vectors</text>
+
+    <path d="M320 43 L370 43" class="line"/>
+    <text x="318" y="25" class="small muted">view</text>
+
+    <rect x="382" y="0" width="124" height="86" rx="9" class="box"/>
+    <text x="402" y="30" class="label orange">flat</text>
+    <text x="402" y="55" class="text ink">[B,T*E]</text>
+    <text x="402" y="75" class="small muted">features</text>
+
+    <path d="M518 43 L568 43" class="line"/>
+    <text x="514" y="25" class="small muted">@ W1</text>
+
+    <rect x="580" y="0" width="124" height="86" rx="9" class="box"/>
+    <text x="600" y="30" class="label blue">h</text>
+    <text x="600" y="55" class="text ink">[B,H]</text>
+    <text x="600" y="75" class="small muted">hidden</text>
+
+    <path d="M716 43 L766 43" class="line"/>
+    <text x="712" y="25" class="small muted">@ W2</text>
+
+    <rect x="778" y="0" width="124" height="86" rx="9" class="box"/>
+    <text x="798" y="30" class="label red">logits</text>
+    <text x="798" y="55" class="text ink">[B,V]</text>
+    <text x="798" y="75" class="small muted">scores</text>
+
+    <path d="M914 43 L964 43" class="line"/>
+  </g>
+
+  <g transform="translate(766 250)">
+    <rect x="0" y="0" width="124" height="70" rx="9" class="box"/>
+    <text x="20" y="28" class="label green">probs</text>
+    <text x="20" y="52" class="text ink">[B,V]</text>
+    <path d="M136 35 L186 35" class="line"/>
+    <rect x="198" y="0" width="74" height="70" rx="9" class="box"/>
+    <text x="217" y="28" class="label red">loss</text>
+    <text x="216" y="52" class="text ink">[]</text>
+  </g>
+  <path d="M964 171 C1010 171 1010 285 958 285" class="line"/>
+  <text x="904" y="234" class="small muted">softmax + pick Y</text>
+
+  <text x="38" y="330" class="text ink">For this blog: B=32, T=3, E=2, H=100, V=27.</text>
+</svg>

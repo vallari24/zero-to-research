@@ -1,5 +1,8 @@
 # Building Micrograd: Brief Notes
 
+This note is about one scalar graph at a time. The key move is to keep track of
+how a value flows forward and how gradient signal flows back.
+
 ## Neural network intuition
 
 A neuron is just:
@@ -10,6 +13,15 @@ o = f\left(\sum_i w_i x_i + b\right)
 
 Inputs carry information, weights decide importance, bias shifts the total, and
 the activation turns that total into an output.
+
+![Scalar backprop graph](assets/01_scalar_graph.svg)
+
+Read the picture like this:
+
+```text
+inputs -> local operation -> output -> loss
+loss -> gradient signal -> local operation -> inputs
+```
 
 ## Chain rule intuition
 
@@ -22,6 +34,12 @@ Backprop is repeated chain rule.
 If `x` affects the loss only through `y`, then its effect must flow through
 `y`.
 
+In practice, that means every node in the graph stores two things:
+
+```text
+value and local derivative
+```
+
 ## Operator intuition
 
 For gradients, `+` and `*` behave differently:
@@ -30,6 +48,9 @@ For gradients, `+` and `*` behave differently:
 - so `+` just passes the upstream gradient unchanged to both inputs
 - multiply operator: if `z = x * y`, then `dz/dx = y` and `dz/dy = x`
 - so `*` sends each input the upstream gradient scaled by the other input
+
+That is why multiplication needs both inputs during backward: each side needs
+the other side's value to compute its local gradient.
 
 ## Manual backprop example
 
@@ -91,6 +112,8 @@ Backward pass:
   `dL/da = (-2) * (-3) = 6`
   and `dL/db = (-2) * 2 = -4`
 
+The graph picture tells you the direction; the chain rule tells you the numbers.
+
 ## Where those gradients came from
 
 - `dL/dL = 1` because any variable differentiated with respect to itself is `1`
@@ -121,6 +144,15 @@ For example, `MLP(3, [4, 4, 1])` means:
 ```text
 3 inputs -> 4 neurons -> 4 neurons -> 1 output
 ```
+
+The stack picture is:
+
+```text
+input scalars -> neuron -> layer -> MLP -> loss
+```
+
+The only difference between the toy graph above and a full MLP is repetition:
+the same scalar rules are applied many times in parallel.
 
 Training adds one more scalar: the loss. A simple squared-error loss is:
 
