@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 500" role="img" aria-labelledby="title desc">
+  <title id="title">Sampling loop for Makemore</title>
+  <desc id="desc">A diagram showing how a context is passed through the network, converted to probabilities, sampled, shifted, and repeated until the end token.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .box { fill: #ffffff; stroke: #d7dce2; stroke-width: 1.5; }
+      .cell { fill: #f4f7fb; stroke: #cbd5e1; stroke-width: 1.2; }
+      .pick { fill: #ecfdf5; stroke: #9ad6bd; stroke-width: 1.2; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .red { fill: #dc2626; }
+      .line { stroke: #66758a; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .loop { stroke: #2563eb; stroke-width: 1.8; stroke-dasharray: 7 6; fill: none; marker-end: url(#blueArrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+    <marker id="blueArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1040" height="500" rx="18"/>
+  <text x="38" y="48" class="label ink">Sampling: generate one character, then feed it back</text>
+  <text x="38" y="78" class="text muted">Generation uses the same forward pass, but samples from probabilities instead of computing loss.</text>
+
+  <g transform="translate(70 145)">
+    <text x="0" y="-20" class="small muted">context</text>
+    <rect x="0" y="0" width="48" height="48" rx="8" class="cell"/><text x="19" y="31" class="text ink">.</text>
+    <rect x="58" y="0" width="48" height="48" rx="8" class="cell"/><text x="77" y="31" class="text ink">.</text>
+    <rect x="116" y="0" width="48" height="48" rx="8" class="cell"/><text x="135" y="31" class="text ink">.</text>
+  </g>
+
+  <path d="M250 169 L320 169" class="line"/>
+
+  <g transform="translate(335 124)">
+    <rect x="0" y="0" width="155" height="90" rx="12" class="box"/>
+    <text x="24" y="35" class="text blue">forward</text>
+    <text x="24" y="62" class="small muted">[1,3] -> [1,27]</text>
+  </g>
+
+  <path d="M505 169 L575 169" class="line"/>
+
+  <g transform="translate(590 124)">
+    <rect x="0" y="0" width="155" height="90" rx="12" class="box"/>
+    <text x="24" y="35" class="text orange">softmax</text>
+    <text x="24" y="62" class="small muted">scores -> probs</text>
+  </g>
+
+  <path d="M760 169 L830 169" class="line"/>
+
+  <g transform="translate(845 124)">
+    <rect x="0" y="0" width="125" height="90" rx="12" class="pick"/>
+    <text x="24" y="35" class="text green">sample</text>
+    <text x="24" y="62" class="small muted">ix = m</text>
+  </g>
+
+  <g transform="translate(260 305)">
+    <rect x="0" y="0" width="520" height="105" rx="12" class="box"/>
+    <text x="28" y="34" class="text ink">context = context[1:] + [ix]</text>
+    <text x="28" y="65" class="small muted">[., ., .] + m -> [., ., m]</text>
+    <text x="28" y="88" class="small muted">append itos[ix] to the output string</text>
+  </g>
+
+  <path d="M905 220 C905 340 780 357 790 357" class="loop"/>
+  <path d="M260 357 C105 357 105 225 135 205" class="loop"/>
+  <text x="810" y="350" class="small blue">repeat until "."</text>
+</svg>

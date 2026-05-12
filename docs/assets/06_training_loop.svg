@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 500" role="img" aria-labelledby="title desc">
+  <title id="title">Training loop for the Makemore MLP</title>
+  <desc id="desc">A diagram showing minibatch selection, forward pass, loss, backward pass, and parameter update.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .box { fill: #ffffff; stroke: #d7dce2; stroke-width: 1.5; }
+      .code { fill: #f4f7fb; stroke: #cbd5e1; stroke-width: 1.2; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .red { fill: #dc2626; }
+      .line { stroke: #66758a; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .back { stroke: #dc2626; stroke-width: 1.7; stroke-dasharray: 7 6; fill: none; marker-end: url(#redArrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+    <marker id="redArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#dc2626"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1040" height="500" rx="18"/>
+  <text x="38" y="48" class="label ink">Training loop: predict, measure, backprop, update</text>
+  <text x="38" y="78" class="text muted">The same five parameters are reused on every minibatch.</text>
+
+  <g transform="translate(70 135)">
+    <rect x="0" y="0" width="160" height="90" rx="12" class="box"/>
+    <text x="24" y="34" class="text blue">minibatch</text>
+    <text x="24" y="61" class="small muted">Xb [32,3]</text>
+    <text x="24" y="79" class="small muted">Yb [32]</text>
+
+    <path d="M175 45 L245 45" class="line"/>
+
+    <rect x="260" y="0" width="170" height="90" rx="12" class="box"/>
+    <text x="284" y="34" class="text green">forward</text>
+    <text x="284" y="61" class="small muted">C -> W1 -> W2</text>
+    <text x="284" y="79" class="small muted">logits [32,27]</text>
+
+    <path d="M445 45 L515 45" class="line"/>
+
+    <rect x="530" y="0" width="160" height="90" rx="12" class="box"/>
+    <text x="554" y="34" class="text orange">loss</text>
+    <text x="554" y="61" class="small muted">cross_entropy</text>
+    <text x="554" y="79" class="small muted">scalar</text>
+
+    <path d="M705 45 L775 45" class="line"/>
+
+    <rect x="790" y="0" width="160" height="90" rx="12" class="box"/>
+    <text x="814" y="34" class="text red">backward</text>
+    <text x="814" y="61" class="small muted">loss.backward()</text>
+    <text x="814" y="79" class="small muted">p.grad filled</text>
+  </g>
+
+  <path d="M870 230 C870 330 350 330 350 250" class="back"/>
+  <text x="445" y="316" class="small red">gradients flow back to every parameter</text>
+
+  <g transform="translate(300 370)">
+    <rect x="0" y="0" width="440" height="72" rx="12" class="code"/>
+    <text x="28" y="31" class="text ink">p.data += -lr * p.grad</text>
+    <text x="28" y="55" class="small muted">move each parameter opposite its gradient</text>
+  </g>
+</svg>

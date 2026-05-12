@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 470" role="img" aria-labelledby="title desc">
+  <title id="title">Dataset generation with a sliding context window</title>
+  <desc id="desc">A diagram showing how the name emma becomes context target training pairs using a three character context window.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .box { fill: #ffffff; stroke: #d7dce2; stroke-width: 1.5; }
+      .cell { fill: #f4f7fb; stroke: #cbd5e1; stroke-width: 1.2; }
+      .target { fill: #ecfdf5; stroke: #9ad6bd; stroke-width: 1.2; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .orange { fill: #d97706; }
+      .line { stroke: #66758a; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="980" height="470" rx="18"/>
+  <text x="38" y="48" class="label ink">Dataset generation: the sliding window</text>
+  <text x="38" y="78" class="text muted">Every row asks: given 3 previous characters, what comes next?</text>
+
+  <text x="58" y="128" class="text ink">name: emma.</text>
+  <text x="58" y="158" class="small muted">"." = start/end token</text>
+
+  <g transform="translate(290 112)">
+    <rect x="0" y="0" width="56" height="56" rx="9" class="cell"/>
+    <text x="22" y="35" class="text blue">e</text>
+    <rect x="68" y="0" width="56" height="56" rx="9" class="cell"/>
+    <text x="90" y="35" class="text blue">m</text>
+    <rect x="136" y="0" width="56" height="56" rx="9" class="cell"/>
+    <text x="158" y="35" class="text blue">m</text>
+    <rect x="204" y="0" width="56" height="56" rx="9" class="cell"/>
+    <text x="226" y="35" class="text blue">a</text>
+    <rect x="272" y="0" width="56" height="56" rx="9" class="cell"/>
+    <text x="294" y="35" class="text blue">.</text>
+  </g>
+
+  <g transform="translate(70 225)">
+    <text x="0" y="-24" class="small muted">context</text>
+    <text x="322" y="-24" class="small muted">target</text>
+
+    <g transform="translate(0 0)">
+      <rect x="0" y="0" width="48" height="44" rx="7" class="cell"/><text x="19" y="28" class="text ink">.</text>
+      <rect x="56" y="0" width="48" height="44" rx="7" class="cell"/><text x="75" y="28" class="text ink">.</text>
+      <rect x="112" y="0" width="48" height="44" rx="7" class="cell"/><text x="131" y="28" class="text ink">.</text>
+      <path d="M174 22 L238 22" class="line"/>
+      <rect x="252" y="0" width="48" height="44" rx="7" class="target"/><text x="271" y="28" class="text green">e</text>
+    </g>
+    <g transform="translate(0 58)">
+      <rect x="0" y="0" width="48" height="44" rx="7" class="cell"/><text x="19" y="28" class="text ink">.</text>
+      <rect x="56" y="0" width="48" height="44" rx="7" class="cell"/><text x="75" y="28" class="text ink">.</text>
+      <rect x="112" y="0" width="48" height="44" rx="7" class="cell"/><text x="131" y="28" class="text ink">e</text>
+      <path d="M174 22 L238 22" class="line"/>
+      <rect x="252" y="0" width="48" height="44" rx="7" class="target"/><text x="271" y="28" class="text green">m</text>
+    </g>
+    <g transform="translate(0 116)">
+      <rect x="0" y="0" width="48" height="44" rx="7" class="cell"/><text x="19" y="28" class="text ink">.</text>
+      <rect x="56" y="0" width="48" height="44" rx="7" class="cell"/><text x="75" y="28" class="text ink">e</text>
+      <rect x="112" y="0" width="48" height="44" rx="7" class="cell"/><text x="131" y="28" class="text ink">m</text>
+      <path d="M174 22 L238 22" class="line"/>
+      <rect x="252" y="0" width="48" height="44" rx="7" class="target"/><text x="271" y="28" class="text green">m</text>
+    </g>
+  </g>
+
+  <g transform="translate(560 228)">
+    <rect x="0" y="0" width="330" height="130" rx="12" class="box"/>
+    <text x="24" y="34" class="text orange">context = context[1:] + [ix]</text>
+    <text x="24" y="66" class="small muted">drop oldest character</text>
+    <text x="24" y="91" class="small muted">append the target character</text>
+    <text x="24" y="116" class="small muted">repeat until "."</text>
+  </g>
+</svg>
