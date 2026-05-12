@@ -1,4 +1,4 @@
-# Lecture 2: Bigram Model
+# Bigram Model
 
 A bigram model is a character model that looks at the current character and
 predicts the next one.
@@ -1195,7 +1195,7 @@ and therefore a slightly lower average negative log likelihood.
 At this stage, the count-based bigram model and the neural bigram model often
 end up with very similar loss.
 
-That is not surprising. In this lecture, both models are solving essentially
+That is not surprising. In this setup, both models are solving essentially
 the same problem:
 
 - look at one current character
@@ -1236,7 +1236,7 @@ A neural net gives a more flexible path:
 - add hidden layers
 - learn shared structure instead of memorizing each context separately
 
-So in this lecture, the neural bigram model is important mainly as a bridge:
+So in this setup, the neural bigram model is important mainly as a bridge:
 
 ```text
 same task
@@ -1248,7 +1248,7 @@ same task
 That differentiable form is what makes later models possible, including
 multi-character MLPs, recurrent models, and transformers.
 
-## Two Notes from the Lecture
+## Two Notes Worth Keeping
 
 ### 1. One-hot encoding is really a row lookup
 

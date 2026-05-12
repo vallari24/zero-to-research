@@ -2091,7 +2091,7 @@ read as the final held-out check after choosing from validation.
 
 ### E01. Tune Hyperparameters to Beat Validation Loss 2.2
 
-The target from the lecture was to beat a validation loss of about:
+The target for this run was to beat a validation loss of about:
 
 ```text
 2.2
@@ -2478,7 +2478,7 @@ Results:
 
 | initialization | train loss | validation loss | test loss |
 | --- | ---: | ---: | ---: |
-| careless lecture-style | `26.0047` | `26.0105` | `26.0153` |
+| careless large-logit init | `26.0047` | `26.0105` | `26.0153` |
 
 This is very bad.
 
@@ -2909,10 +2909,10 @@ make optimization stable
 
 The external reference points that helped interpret these runs:
 
-- Karpathy's original Part 2 notebook gives a validation loss around `2.17` for
-  the starter MLP setup.
-- Part 3 initialization notes explain why the ideal initial loss is
-  `log(27) = 3.2958` and why very large random logits create a fake high loss.
+- A simple starter MLP should get validation loss around `2.2`, with tuned
+  variants moving lower.
+- The ideal initial loss is `log(27) = 3.2958`; very large random logits create
+  a fake high loss before learning has really begun.
 - Bengio et al. 2003 motivates distributed embeddings, longer contexts, direct
   connections, regularization, and mixing neural predictions with n-gram
   predictions.
