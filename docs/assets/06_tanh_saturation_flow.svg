@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 520" role="img" aria-labelledby="title desc">
+  <title id="title">Tanh saturation and gradient flow</title>
+  <desc id="desc">A diagram showing that tanh passes gradients near zero but kills gradients in its flat tails near negative one and positive one.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .box { fill: #ffffff; stroke: #d7dce2; stroke-width: 1.5; }
+      .soft { fill: #f4f7fb; stroke: #cbd5e1; stroke-width: 1.2; }
+      .bad { fill: #fef2f2; stroke: #fecaca; stroke-width: 1.2; }
+      .good { fill: #ecfdf5; stroke: #9ad6bd; stroke-width: 1.2; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #627084; }
+      .blue { fill: #2563eb; }
+      .green { fill: #059669; }
+      .red { fill: #dc2626; }
+      .orange { fill: #d97706; }
+      .axis { stroke: #94a3b8; stroke-width: 1.3; }
+      .curve { stroke: #2563eb; stroke-width: 4; fill: none; }
+      .grad { stroke: #059669; stroke-width: 3; fill: none; stroke-dasharray: 7 6; }
+      .line { stroke: #66758a; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .label { font: 700 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 500 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66758a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1120" height="520" rx="18"/>
+  <text x="38" y="48" class="label ink">tanh saturation: forward values look active, gradients disappear</text>
+  <text x="38" y="78" class="text muted">If hpreact is too large, tanh lands in a flat tail near -1 or +1.</text>
+
+  <g transform="translate(70 130)">
+    <rect x="0" y="0" width="420" height="300" rx="12" class="box"/>
+    <line x1="55" y1="150" x2="365" y2="150" class="axis"/>
+    <line x1="210" y1="45" x2="210" y2="255" class="axis"/>
+    <path d="M55 245 C110 245 145 245 170 220 C190 200 197 170 210 150 C223 130 230 100 250 80 C275 55 315 55 365 55" class="curve"/>
+    <path d="M55 245 C120 244 165 238 190 195 C202 172 207 154 210 150 C213 154 218 172 230 195 C255 238 300 244 365 245" class="grad"/>
+    <text x="178" y="36" class="small muted">y</text>
+    <text x="371" y="154" class="small muted">x</text>
+    <text x="65" y="278" class="text blue">tanh(x)</text>
+    <text x="210" y="278" class="text green">gradient is largest near 0</text>
+    <rect x="22" y="38" width="112" height="50" rx="8" class="bad"/>
+    <text x="37" y="68" class="small red">left tail</text>
+    <rect x="286" y="38" width="112" height="50" rx="8" class="bad"/>
+    <text x="302" y="68" class="small red">right tail</text>
+  </g>
+
+  <g transform="translate(540 130)">
+    <rect x="0" y="0" width="500" height="300" rx="12" class="box"/>
+    <text x="28" y="42" class="text ink">backward through tanh</text>
+    <text x="28" y="76" class="small muted">gradient multiplier = 1 - tanh(x)^2</text>
+
+    <rect x="28" y="108" width="185" height="70" rx="10" class="good"/>
+    <text x="48" y="137" class="text green">h near 0</text>
+    <text x="48" y="160" class="small muted">gradient passes through</text>
+
+    <path d="M225 143 L280 143" class="line"/>
+
+    <rect x="292" y="108" width="180" height="70" rx="10" class="bad"/>
+    <text x="312" y="137" class="text red">h near +/-1</text>
+    <text x="312" y="160" class="small muted">gradient gets killed</text>
+
+    <text x="28" y="218" class="text ink">bad init:</text>
+    <text x="135" y="218" class="small muted">hpreact too wide -> tanh saturated</text>
+    <text x="28" y="250" class="text ink">better init:</text>
+    <text x="135" y="250" class="small muted">scale W1 by gain / sqrt(fan_in)</text>
+  </g>
+</svg>

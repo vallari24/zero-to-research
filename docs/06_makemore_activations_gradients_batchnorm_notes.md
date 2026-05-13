@@ -382,6 +382,19 @@ This is the mental imprint:
 embcat [B, 30] @ W1 [30, 200] -> hpreact [B, 200]
 ```
 
+`hpreact` is short for hidden pre-activation.
+
+It is the hidden layer's raw score tensor before the nonlinearity is applied:
+
+```text
+hpreact = hidden values before tanh
+h       = hidden values after tanh
+```
+
+The name is useful because these are two different things. `hpreact` tells us
+what numbers the linear layer produced. `h` tells us what survived after `tanh`
+squashed those numbers into the range `[-1, 1]`.
+
 The inner dimensions match:
 
 ```text
@@ -1428,28 +1441,291 @@ start with no output bias preference
 
 Then the network begins near uniform predictions.
 
-### The Hidden-Layer Initialization Preview
+This fixes the first obvious problem: the output layer should not begin with
+wildly overconfident logits. The next problem is one layer earlier, inside the
+hidden activations.
 
-The output logits are only one part of initialization. The hidden layer also
-needs a reasonable scale:
-
-```python
-W1 = torch.randn((n_embd * block_size, n_hidden)) * (5 / 3) / ((n_embd * block_size) ** 0.5)
-b1 = torch.randn(n_hidden) * 0.01
-```
-
-The high-level idea:
-
-```text
-W1 should not make hidden pre-activations too large
-b1 should not push tanh into saturation
-W2 should not make first logits overconfident
-```
-
-We will keep unpacking this in the next section. For now, the key habit is:
+For now, the key habit is:
 
 ```text
 check the first loss before trusting the training curve
+```
+
+## Fixing Saturated `tanh`: Hidden-Layer Initialization
+
+The output layer controls the logits:
+
+```python
+logits = h @ W2 + b2
+```
+
+So `W2` and `b2` are responsible for the scale of the first output scores.
+
+The hidden layer controls the input to `tanh`:
+
+```python
+hpreact = embcat @ W1 + b1
+h = torch.tanh(hpreact)
+```
+
+Read this as two separate steps:
+
+```text
+embcat @ W1 + b1      -> raw hidden neuron values
+torch.tanh(hpreact)  -> squashed hidden neuron activations
+```
+
+`hpreact` is the raw input to the activation function. It is called
+pre-activation because it exists before `tanh`.
+
+So `W1` and `b1` are responsible for the scale of `hpreact`, which decides
+whether `tanh` operates in its useful middle region or in its flat saturated
+tails.
+
+### What An Activation Function Does
+
+An activation function is the nonlinearity between linear layers. Without it,
+the model would mostly collapse into one larger linear transformation.
+
+For this MLP, the activation is:
+
+```python
+h = torch.tanh(hpreact)
+```
+
+`tanh` maps every input to the range:
+
+```text
+[-1, 1]
+```
+
+That sounds healthy, but it creates a danger. When the input to `tanh` is very
+negative or very positive, the output gets extremely close to `-1` or `1`. In
+those flat tail regions, changing the input barely changes the output.
+
+That means the gradient through `tanh` becomes tiny.
+
+![Tanh saturation and gradient flow](assets/06_tanh_saturation_flow.svg)
+
+High-level rule:
+
+```text
+hpreact near 0     -> tanh is sensitive -> gradient passes through
+hpreact very large -> tanh is flat      -> gradient is crushed
+```
+
+The backward multiplier for `tanh` is:
+
+```text
+1 - tanh(x)^2
+```
+
+So if `tanh(x)` is close to `1` or `-1`, then:
+
+```text
+1 - tanh(x)^2 ~= 0
+```
+
+The gradient is almost killed.
+
+### What Saturation Looks Like
+
+With poor hidden-layer initialization, many `tanh` outputs pile up near `-1`
+and `1`:
+
+<img src="assets/06_tanh_activation_saturation_hist.png" alt="Histogram of saturated tanh activations" width="560">
+
+This is a bad activation distribution. Lots of neurons are technically
+"active", but they are active in the wrong way: they are pinned to the edges of
+the activation function.
+
+The pre-activations are too broad:
+
+```text
+hpreact values spread far away from 0
+-> tanh(hpreact) gets pushed into -1 and +1
+-> tanh derivative becomes tiny
+-> gradients shrink before reaching W1 and C
+```
+
+This is what "killing the gradient" means. The loss may still compute normally,
+but the signal telling earlier parameters how to change becomes very small.
+
+### Dead Neurons
+
+A useful diagnostic is:
+
+```python
+plt.imshow(
+    h.abs() > 0.99,
+    cmap="gray",
+    interpolation="nearest",
+)
+```
+
+<img src="assets/06_dead_neuron_saturation_mask.svg" alt="Saturation mask for hidden tanh activations" width="720">
+
+This creates a saturation mask:
+
+```text
+white cell -> this activation is saturated
+black cell -> this activation is not saturated
+```
+
+If a whole column is white, that hidden neuron is saturated for every example in
+the batch. It is effectively dead for that batch because useful gradients do not
+flow through it.
+
+The same idea appears with ReLU:
+
+```text
+ReLU(x) = max(0, x)
+```
+
+If a ReLU neuron's pre-activation is always negative, the output is always zero
+and the gradient through that unit is zero. That neuron is dead. This can happen
+from bad initialization or from a learning rate that knocks the neuron into a
+region where it never activates again.
+
+Leaky ReLU was designed partly to avoid this exact flat-zero problem:
+
+```text
+Leaky ReLU keeps a small slope for negative inputs
+```
+
+The broader lesson:
+
+```text
+flat activation regions are dangerous because they block learning signals
+```
+
+In a small shallow network, there is some room for error. In a deep network,
+these small scale mistakes stack layer after layer.
+
+### Do Not Set All Weights To Zero
+
+One tempting fix is:
+
+```text
+make all weights zero
+```
+
+That would make the first logits and activations small, but it creates a worse
+problem: all neurons become identical.
+
+If every hidden neuron starts with the same weights, then every hidden neuron
+gets the same gradient and learns the same feature. The layer wastes its width.
+
+So we want:
+
+```text
+small random weights
+not all-zero weights
+```
+
+The randomness breaks symmetry. The scale keeps the activations healthy.
+
+### The Fan-In Scaling Rule
+
+Instead of choosing magic constants by hand, use the number of inputs to the
+layer.
+
+For:
+
+```python
+hpreact = embcat @ W1 + b1
+```
+
+`embcat` has `30` features:
+
+```text
+fan_in = n_embd * block_size = 10 * 3 = 30
+```
+
+A good initialization scales weights like:
+
+```text
+std = gain / sqrt(fan_in)
+```
+
+For `tanh`, the common gain is:
+
+```text
+gain = 5 / 3
+```
+
+So:
+
+```text
+std = (5 / 3) / sqrt(30) ~= 0.304
+```
+
+That is the scale we want for `W1`.
+
+```python
+fan_in = n_embd * block_size
+W1 = torch.randn((fan_in, n_hidden)) * (5 / 3) / (fan_in ** 0.5)
+b1 = torch.randn(n_hidden) * 0.01
+```
+
+Read this as:
+
+```text
+divide by sqrt(number of inputs)
+multiply by gain for the nonlinearity
+keep the bias tiny
+```
+
+The `5/3` gain is there because `tanh` is contractive. It squeezes values toward
+the middle, so initialization gives it a small boost while still avoiding the
+extreme saturated tails.
+
+For ReLU, the common gain is different:
+
+```text
+ReLU gain ~= sqrt(2)
+```
+
+The exact gain depends on the activation function.
+
+This is the same family of ideas behind Kaiming/He initialization. For a layer
+with many inputs, the raw sum would otherwise grow too large. Dividing by
+`sqrt(fan_in)` keeps the forward activations controlled, and the gain adjusts
+for the nonlinearity. When the forward signal is scaled well, the backward
+gradients usually behave much better too.
+
+### Better Initialization For This MLP
+
+Putting the two initialization fixes together:
+
+```python
+fan_in = n_embd * block_size
+
+C = torch.randn((vocab_size, n_embd))
+W1 = torch.randn((fan_in, n_hidden)) * (5 / 3) / (fan_in ** 0.5)
+b1 = torch.randn(n_hidden) * 0.01
+W2 = torch.randn((n_hidden, vocab_size)) * 0.01
+b2 = torch.zeros(vocab_size)
+```
+
+Role of each fix:
+
+```text
+W1 scale -> keeps tanh out of saturation
+b1 small -> avoids pushing hidden units into tails
+W2 small -> keeps initial logits near zero
+b2 zero  -> avoids initial output-class preference
+```
+
+This is not just about making the loss curve prettier. It prevents early
+training from wasting thousands of steps undoing bad scale choices.
+
+Modern architectures are less fragile than this tiny MLP because they often use
+residual connections, normalization layers, and better optimizers. But the habit
+still matters:
+
+```text
+inspect activation scale before trusting training
 ```
 
 ## BatchNorm Intuition
