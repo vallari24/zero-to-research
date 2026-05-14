@@ -1730,8 +1730,212 @@ inspect activation scale before trusting training
 
 ## BatchNorm Intuition
 
-BatchNorm is a way to normalize activations and then let the network learn how
-to put the scale back.
+BatchNorm continues the same initialization story.
+
+For `tanh`, we do not want the hidden pre-activations to be too small or too
+large:
+
+```text
+hpreact too small -> tanh is almost linear and barely does anything
+hpreact healthy   -> tanh is nonlinear, but still has usable slope
+hpreact too large -> tanh saturates near -1 or 1 and gradients get crushed
+```
+
+<img src="assets/06_batchnorm_tanh_target.svg" alt="BatchNorm target range before tanh" width="720">
+
+At initialization, we tried to make `hpreact` roughly centered around `0` with
+a reasonable standard deviation, roughly like a standard Gaussian cloud of
+numbers. Batch Normalization asks a stronger question:
+
+```text
+why only make this true at initialization?
+why not normalize these hidden values during training too?
+```
+
+The Batch Normalization paper takes the hidden values in a mini-batch, computes
+their batch mean and batch variance, and normalizes them:
+
+```text
+batch mean     = average value over the mini-batch
+batch variance = average squared distance from that mean
+normalized x   = (x - batch mean) / sqrt(batch variance + epsilon)
+```
+
+Strictly speaking, this does not force the values to become a perfect Gaussian.
+It forces each feature to have batch mean near `0` and batch standard deviation
+near `1`. That is the part we need for healthier signal flow.
+
+In our MLP, the hidden pre-activation tensor is:
+
+```python
+hpreact = embcat @ W1 + b1
+```
+
+Its shape is:
+
+```text
+hpreact.shape == [batch_size, n_hidden]
+               == [32, 200]
+```
+
+Read that shape as:
+
+```text
+rows    -> examples in the batch
+columns -> hidden neurons
+```
+
+BatchNorm wants one mean and one standard deviation per hidden neuron. So for
+each column, we look down the batch and summarize the `32` values for that
+neuron.
+
+That is why the code reduces over dimension `0`:
+
+```python
+hpreact_mean = hpreact.mean(0, keepdim=True)
+hpreact_std = hpreact.std(0, keepdim=True)
+
+hpreact = (hpreact - hpreact_mean) / hpreact_std
+```
+
+The shape story:
+
+```text
+hpreact                         [32, 200]
+hpreact.mean(0, keepdim=True)   [1, 200]
+hpreact.std(0, keepdim=True)    [1, 200]
+normalized hpreact              [32, 200]
+```
+
+`dim=0` means:
+
+```text
+collapse the batch/example axis
+keep one statistic per hidden neuron
+```
+
+`keepdim=True` keeps the result as `[1, 200]` instead of `[200]`. That makes the
+subtraction and division line up visually with `[32, 200]`: the same mean and
+standard deviation for each hidden neuron are broadcast over all `32` examples.
+
+This is the notebook version of the paper's formula:
+
+```python
+eps = 1e-5
+
+hpreact = embcat @ W1 + b1
+hpreact_mean = hpreact.mean(0, keepdim=True)
+hpreact_var = hpreact.var(0, keepdim=True)
+hpreact_norm = (hpreact - hpreact_mean) / torch.sqrt(hpreact_var + eps)
+```
+
+The `eps` is only for numerical stability. It prevents division by zero if a
+batch has almost no variance for some hidden neuron.
+
+But plain BatchNorm is too restrictive.
+
+Plain normalization says:
+
+```python
+hpreact_norm = (hpreact - mean) / std
+```
+
+That forces every hidden neuron to have:
+
+```text
+mean = 0
+std  = 1
+```
+
+That is good for stability, but the network may not want every neuron to always
+live at exactly that scale and center.
+
+So BatchNorm adds:
+
+```text
+hpreact_bn = bngain * hpreact_norm + bnbias
+```
+
+Think of it as:
+
+```text
+normalize first so training is stable
+then let the network learn the best scale and offset
+```
+
+In the paper, these are called `gamma` and `beta`. In the notebook-style code,
+they are:
+
+```text
+gamma -> bngain
+beta  -> bnbias
+```
+
+In code:
+
+```python
+bngain = torch.ones((1, n_hidden))
+bnbias = torch.zeros((1, n_hidden))
+
+hpreact = bngain * hpreact_norm + bnbias
+```
+
+`bngain` controls spread:
+
+```text
+bngain > 1 -> make the neuron more sensitive / sharper
+bngain < 1 -> make the neuron softer / less sensitive
+```
+
+`bnbias` controls center:
+
+```text
+bnbias > 0 -> shift the neuron toward firing positive
+bnbias < 0 -> shift the neuron toward firing negative
+```
+
+Because these are learned parameters, they belong in the parameter list too:
+
+```python
+parameters = [C, W1, b1, W2, b2, bngain, bnbias]
+```
+
+At initialization:
+
+```python
+bngain = torch.ones((1, n_hidden))
+bnbias = torch.zeros((1, n_hidden))
+```
+
+So initially:
+
+```text
+hpreact_bn = 1 * hpreact_norm + 0
+```
+
+Nothing changes after normalization. But during training, backprop updates
+`bngain` and `bnbias`, giving the model freedom back.
+
+Example with `tanh`:
+
+```python
+h = torch.tanh(hpreact_bn)
+```
+
+If BatchNorm forced `hpreact` to always mean `0` and std `1`, then every `tanh`
+neuron would always be centered the same way. But maybe the model wants one
+neuron to activate only for strong evidence, another to be more trigger-happy,
+and another to sit slightly positive.
+
+So the useful rule is:
+
+```text
+without bngain/bnbias:
+BatchNorm controls the neuron too much
+
+with bngain/bnbias:
+BatchNorm stabilizes the neuron, then lets learning decide the final behavior
+```
 
 ![BatchNorm flow](assets/06_batchnorm_flow.svg)
 
@@ -1753,6 +1957,170 @@ let the model relearn the best scale
 
 That is why BatchNorm often makes optimization easier: it keeps the internal
 numbers from drifting into bad ranges.
+
+In this small one-hidden-layer network, BatchNorm may not look dramatic because
+there is only one hidden layer to keep healthy. In deeper networks, this matters
+much more. Every layer has its own weight matrix, activation scale, and gradient
+scale. Without normalization, tiny scale mistakes can stack across depth.
+
+BatchNorm gives the model a repeated correction point:
+
+```text
+linear layer -> normalize pre-activations -> learned gain/bias -> activation
+```
+
+That is why it can significantly stabilize training in deeper neural networks.
+
+## Initialization And Normalization: The Big Picture
+
+The main idea is that activations and gradients become more important as neural
+networks get bigger and deeper. A model can have the right code and the right
+shapes, but still train badly if the numbers flowing through it are unhealthy.
+
+The first example was the output layer. Bad initialization made the logits too
+extreme, so the model was confidently wrong at the start. That caused the
+"hockey stick" loss curve: the first few thousand steps were wasted mostly
+squashing logits instead of learning useful structure.
+
+The second example was the hidden layer. If hidden pre-activations are too
+large, `tanh` saturates near `-1` or `1`, and gradients get crushed. If they are
+too small, `tanh` becomes almost linear and does not do much. The target is
+healthy signal flow: activations should stay roughly centered and reasonably
+scaled through the network.
+
+Manual initialization can handle this in a tiny one-hidden-layer network. But in
+deep networks with many layers, residual paths, convolutions, and different
+operations, it becomes very hard to hand-tune every weight scale so every layer
+has healthy activations.
+
+That motivates normalization layers. Common normalization layers include
+BatchNorm, LayerNorm, InstanceNorm, and GroupNorm.
+
+BatchNorm's basic move is:
+
+```text
+take activations
+compute batch mean and standard deviation
+center and scale the activations
+add learned gain and bias
+```
+
+This is powerful because the normalization operation is differentiable, so it
+can sit inside the network and participate in backpropagation.
+
+But BatchNorm also adds complexity. Since it computes statistics across the
+batch, examples are no longer completely independent during the forward pass.
+That creates the inference question: what do we do when we want to pass one
+example through the model? The answer is to keep running estimates of the mean
+and variance during training, then use those running statistics during
+inference.
+
+During training, BatchNorm uses the current mini-batch:
+
+```python
+bnmeani = hpreact.mean(0, keepdim=True)
+bnstdi = hpreact.std(0, keepdim=True)
+
+hpreact = bngain * (hpreact - bnmeani) / bnstdi + bnbias
+```
+
+If:
+
+```text
+hpreact.shape == [32, 200]
+```
+
+then:
+
+```text
+bnmeani.shape == [1, 200]
+bnstdi.shape  == [1, 200]
+```
+
+For each hidden neuron, BatchNorm asks:
+
+```text
+Across these 32 examples, what is this neuron's mean?
+Across these 32 examples, what is this neuron's std?
+```
+
+That works during training because we have a batch. But during inference or
+sampling, we often generate one example at a time:
+
+```text
+hpreact.shape == [1, 200]
+```
+
+Now the batch has only one row. Its standard deviation is not a reliable dataset
+statistic. So during training, we keep a running estimate:
+
+```python
+with torch.no_grad():
+    bnmean_running = 0.999 * bnmean_running + 0.001 * bnmeani
+    bnstd_running = 0.999 * bnstd_running + 0.001 * bnstdi
+```
+
+This means:
+
+```text
+mostly keep the old estimate
+add a tiny bit of the current batch's estimate
+```
+
+It is an exponential moving average. We do not simply write:
+
+```python
+bnmean_running = bnmeani
+```
+
+because one mini-batch is noisy. A batch of `32` examples may not represent the
+whole dataset. The running version smooths many batches together.
+
+After training, `bnmean_running` and `bnstd_running` approximate:
+
+```text
+typical mean of each hidden neuron over the training data
+typical std of each hidden neuron over the training data
+```
+
+Then at inference:
+
+```python
+hpreact = bngain * (hpreact - bnmean_running) / bnstd_running + bnbias
+```
+
+The training/inference split is:
+
+```text
+training:
+use current batch stats
+also update running stats
+
+inference:
+do not use current batch stats
+use running stats collected during training
+```
+
+The `with torch.no_grad()` matters because the running mean and running std are
+not learned by backpropagation. They are buffers: statistics updated manually.
+
+In this small example, the update uses `0.001`, so the running statistics move
+slowly:
+
+```text
+0.999 -> remember most of the past
+0.001 -> incorporate a tiny amount of the current batch
+```
+
+With larger batches, the batch statistics are less noisy, so the running
+estimate can move faster. PyTorch's `BatchNorm1d` default uses `momentum=0.1`,
+which means:
+
+```text
+running = 0.9 * running + 0.1 * current_batch_stat
+```
+
+The idea is the same; only the smoothing speed changes.
 
 ## Recall Checks
 
