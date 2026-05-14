@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+  <title id="title">BatchNorm folding numeric example</title>
+  <desc id="desc">A numeric example showing that a Linear layer followed by a fixed BatchNorm calibration can be replaced by a calibrated Linear layer with the same output.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #fff; stroke: #d7dce2; stroke-width: 1.5; }
+      .linear { fill: #eef2ff; stroke: #818cf8; stroke-width: 1.5; }
+      .bn { fill: #ecfdf5; stroke: #34d399; stroke-width: 1.5; }
+      .folded { fill: #fff7ed; stroke: #fb923c; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #64748b; }
+      .blue { fill: #3730a3; }
+      .green { fill: #047857; }
+      .orange { fill: #c2410c; }
+      .line { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .orangeLine { stroke: #d97706; stroke-width: 3; fill: none; marker-end: url(#orangeArrow); }
+      .label { font: 700 24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 600 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .num { font: 700 22px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="orangeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1120" height="560" rx="18"/>
+  <text x="42" y="52" class="label ink">Same output, fewer inference steps</text>
+  <text x="42" y="82" class="small muted">A tiny numeric example. The exact numbers are made up only to show the mechanism.</text>
+
+  <rect x="54" y="118" width="1012" height="154" rx="14" class="panel"/>
+  <text x="82" y="152" class="text ink">Before folding</text>
+
+  <rect x="96" y="176" width="170" height="64" rx="12" class="linear"/>
+  <text x="126" y="202" class="small blue">Linear output</text>
+  <text x="150" y="226" class="num ink">10</text>
+
+  <path d="M282 208 L352 208" class="line"/>
+
+  <rect x="368" y="152" width="334" height="112" rx="12" class="bn"/>
+  <text x="454" y="182" class="text green">BatchNorm eval card</text>
+  <text x="410" y="210" class="small muted">fixed calibration: subtract 4, divide by 2</text>
+  <text x="410" y="234" class="small muted">then multiply by 3, add 1</text>
+
+  <path d="M718 208 L790 208" class="line"/>
+
+  <rect x="806" y="176" width="170" height="64" rx="12" class="bn"/>
+  <text x="844" y="202" class="small green">final output</text>
+  <text x="862" y="226" class="num ink">10</text>
+
+  <path d="M534 270 C528 314, 482 326, 438 354" class="orangeLine"/>
+  <text x="548" y="326" class="small orange">precompute that card into Linear</text>
+
+  <rect x="54" y="362" width="1012" height="136" rx="14" class="panel"/>
+  <text x="82" y="396" class="text ink">After folding</text>
+
+  <rect x="96" y="420" width="264" height="58" rx="12" class="folded"/>
+  <text x="126" y="444" class="small orange">Calibrated Linear output</text>
+  <text x="210" y="468" class="num ink">10</text>
+
+  <path d="M376 449 L790 449" class="line"/>
+
+  <rect x="806" y="420" width="170" height="58" rx="12" class="folded"/>
+  <text x="842" y="443" class="small orange">same output</text>
+  <text x="862" y="467" class="num ink">10</text>
+
+  <text x="408" y="486" class="small muted">The BatchNorm card is gone from the runtime path.</text>
+</svg>

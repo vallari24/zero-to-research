@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 620" role="img" aria-labelledby="title desc">
+  <title id="title">BatchNorm folding intuition</title>
+  <desc id="desc">A simple before and after diagram showing that BatchNorm folding bakes a fixed inference-time calibration step into the previous Linear layer.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #fff; stroke: #d7dce2; stroke-width: 1.5; }
+      .linear { fill: #eef2ff; stroke: #818cf8; stroke-width: 1.5; }
+      .bn { fill: #ecfdf5; stroke: #34d399; stroke-width: 1.5; }
+      .folded { fill: #fff7ed; stroke: #fb923c; stroke-width: 1.5; }
+      .note { fill: #f8fafc; stroke: #d7dce2; stroke-width: 1.2; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #64748b; }
+      .blue { fill: #3730a3; }
+      .green { fill: #047857; }
+      .orange { fill: #c2410c; }
+      .line { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .orangeLine { stroke: #d97706; stroke-width: 3; fill: none; marker-end: url(#orangeArrow); }
+      .label { font: 700 24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 600 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .tiny { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="orangeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1120" height="620" rx="18"/>
+  <text x="42" y="52" class="label ink">BatchNorm folding = bake the calibration into Linear</text>
+  <text x="42" y="82" class="small muted">After training, BatchNorm uses fixed running stats, so it behaves like a fixed calibration step.</text>
+
+  <rect x="54" y="118" width="1012" height="176" rx="14" class="panel"/>
+  <text x="82" y="154" class="text ink">Before folding: two runtime steps at inference</text>
+  <text x="96" y="230" class="text ink">input</text>
+  <path d="M154 225 L228 225" class="line"/>
+
+  <rect x="244" y="184" width="214" height="82" rx="12" class="linear"/>
+  <text x="300" y="214" class="text blue">Linear</text>
+  <text x="284" y="240" class="small muted">makes raw scores</text>
+
+  <path d="M474 225 L548 225" class="line"/>
+
+  <rect x="564" y="184" width="246" height="82" rx="12" class="bn"/>
+  <text x="600" y="214" class="text green">BatchNorm eval</text>
+  <text x="598" y="240" class="small muted">calibrates raw scores</text>
+
+  <path d="M826 225 L900 225" class="line"/>
+  <text x="916" y="230" class="text ink">output</text>
+
+  <rect x="836" y="138" width="194" height="54" rx="10" class="note"/>
+  <text x="858" y="161" class="tiny muted">fixed after training:</text>
+  <text x="858" y="180" class="tiny muted">center + stretch + shift</text>
+
+  <path d="M688 292 C676 344, 560 344, 508 390" class="orangeLine"/>
+  <text x="582" y="350" class="small orange">copy calibration into Linear once</text>
+
+  <rect x="54" y="392" width="1012" height="166" rx="14" class="panel"/>
+  <text x="82" y="428" class="text ink">After folding: one runtime step at inference</text>
+  <text x="96" y="502" class="text ink">input</text>
+  <path d="M154 497 L280 497" class="line"/>
+
+  <rect x="296" y="452" width="296" height="90" rx="12" class="folded"/>
+  <text x="348" y="484" class="text orange">Calibrated Linear</text>
+  <text x="334" y="512" class="small muted">raw-score maker with BN</text>
+  <text x="372" y="532" class="small muted">already baked in</text>
+
+  <path d="M608 497 L900 497" class="line"/>
+  <text x="916" y="502" class="text ink">same output</text>
+
+  <rect x="676" y="414" width="250" height="52" rx="10" class="note"/>
+  <text x="704" y="436" class="tiny muted">no separate BatchNorm layer</text>
+  <text x="704" y="455" class="tiny muted">is called at test time</text>
+</svg>

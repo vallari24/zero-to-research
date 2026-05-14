@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 680" role="img" aria-labelledby="title desc">
+  <title id="title">Zero initialization causes symmetry and gradient blocking</title>
+  <desc id="desc">A two-part diagram explaining that identical hidden neurons collapse together and that this zero-initialized MLP only trains the output bias.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .panel { fill: #fff; stroke: #d7dce2; stroke-width: 1.5; }
+      .zero { fill: #f1f5f9; stroke: #cbd5e1; stroke-width: 1.5; }
+      .live { fill: #ecfdf5; stroke: #34d399; stroke-width: 1.5; }
+      .warn { fill: #fff7ed; stroke: #fdba74; stroke-width: 1.5; }
+      .dead { fill: #fef2f2; stroke: #fca5a5; stroke-width: 1.5; }
+      .ink { fill: #1f2933; }
+      .muted { fill: #64748b; }
+      .green { fill: #047857; }
+      .red { fill: #b91c1c; }
+      .orange { fill: #c2410c; }
+      .line { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .redline { stroke: #ef4444; stroke-width: 3.5; fill: none; stroke-linecap: round; }
+      .label { font: 700 24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 600 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1120" height="680" rx="18"/>
+  <text x="42" y="52" class="label ink">Zero initialization: two different failures</text>
+  <text x="42" y="82" class="small muted">A sane first loss does not mean all parameters are getting useful gradients.</text>
+
+  <rect x="54" y="116" width="1012" height="210" rx="14" class="panel"/>
+  <text x="82" y="152" class="text ink">1. Symmetry collapse: identical neurons stay identical</text>
+
+  <g transform="translate(94 176)">
+    <circle cx="42" cy="24" r="24" class="warn"/>
+    <circle cx="42" cy="86" r="24" class="warn"/>
+    <circle cx="42" cy="132" r="24" class="warn"/>
+    <text x="28" y="29" class="small orange">same</text>
+    <text x="28" y="91" class="small orange">same</text>
+    <text x="28" y="137" class="small orange">same</text>
+  </g>
+
+  <path d="M178 270 L294 270" class="line"/>
+  <rect x="310" y="228" width="250" height="84" rx="12" class="warn"/>
+  <text x="348" y="258" class="text orange">same computation</text>
+  <text x="354" y="284" class="small muted">same activations</text>
+
+  <path d="M578 270 L694 270" class="line"/>
+  <rect x="710" y="228" width="268" height="84" rx="12" class="warn"/>
+  <text x="748" y="258" class="text orange">same gradient update</text>
+  <text x="752" y="284" class="small muted">neurons remain copies</text>
+
+  <rect x="54" y="366" width="1012" height="238" rx="14" class="panel"/>
+  <text x="82" y="402" class="text ink">2. This MLP: the hidden network gets no gradient at all</text>
+
+  <rect x="90" y="456" width="128" height="64" rx="12" class="zero"/>
+  <text x="122" y="482" class="small ink">random C</text>
+  <text x="116" y="504" class="small muted">embeddings</text>
+  <path d="M236 488 L314 488" class="line"/>
+
+  <rect x="330" y="456" width="130" height="64" rx="12" class="dead"/>
+  <text x="362" y="482" class="small red">W1,b1 = 0</text>
+  <text x="366" y="504" class="small muted">h = 0</text>
+  <path d="M478 488 L556 488" class="line"/>
+
+  <rect x="572" y="456" width="130" height="64" rx="12" class="dead"/>
+  <text x="610" y="482" class="small red">W2 = 0</text>
+  <text x="600" y="504" class="small muted">blocks dh</text>
+  <path d="M720 488 L798 488" class="line"/>
+
+  <rect x="814" y="456" width="130" height="64" rx="12" class="live"/>
+  <text x="852" y="482" class="small green">b2</text>
+  <text x="836" y="504" class="small muted">can train</text>
+
+  <path d="M702 550 L460 550" class="redline"/>
+  <path d="M570 534 L548 566" class="redline"/>
+  <text x="474" y="586" class="small red">backward signal stops at W2 = 0</text>
+
+  <rect x="88" y="536" width="292" height="46" rx="10" class="zero"/>
+  <text x="110" y="564" class="small muted">C, W1, b1, W2 gradients stay zero</text>
+
+  <rect x="758" y="536" width="220" height="46" rx="10" class="live"/>
+  <text x="790" y="564" class="small green">only output bias learns</text>
+
+  <text x="82" y="640" class="small muted">Result: the model learns global character frequencies, but no context-dependent hidden features.</text>
+</svg>

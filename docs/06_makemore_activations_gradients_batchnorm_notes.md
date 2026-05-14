@@ -2122,6 +2122,259 @@ running = 0.9 * running + 0.1 * current_batch_stat
 
 The idea is the same; only the smoothing speed changes.
 
+## Exercises: What Breaks And What Can Be Removed
+
+These small experiments are useful because they separate what looks possible in
+the equations from what actually gets gradient signal.
+
+The runnable script is:
+
+```bash
+.venv/bin/python scripts/makemore_part3_exercises.py
+```
+
+### E01: Zero-Initialize The MLP Weights And Biases
+
+Purpose:
+
+```text
+test what happens if W1, b1, W2, b2 all start at zero
+```
+
+Keep the embedding table `C` random. The exercise is about the MLP weights and
+biases:
+
+```python
+hpreact = embcat @ W1 + b1
+h = torch.tanh(hpreact)
+logits = h @ W2 + b2
+```
+
+There are two related problems with zero initialization.
+
+The general neural-network problem is symmetry. If hidden neurons start with the
+same weights, they compute the same thing. If they compute the same thing, they
+also receive the same gradient update. So a layer with `200` hidden neurons can
+collapse into many copies of one neuron.
+
+Random initialization breaks that symmetry:
+
+```text
+different starting weights
+-> different activations
+-> different gradients
+-> different features learned
+```
+
+In this exact Makemore MLP, zero initialization creates an even stronger
+problem: the gradient path is blocked.
+
+At initialization:
+
+```text
+W1 = 0, b1 = 0 -> hpreact = 0
+h = tanh(0)    -> h = 0
+W2 = 0, b2 = 0 -> logits = 0
+```
+
+The initial loss is reasonable:
+
+```text
+initial loss ~= 3.2958
+```
+
+That is the uniform-softmax loss for `27` characters. So this does not look
+broken from the first loss alone.
+
+But the gradients reveal the problem:
+
+```text
+C.grad  = 0
+W1.grad = 0
+b1.grad = 0
+W2.grad = 0
+b2.grad > 0
+```
+
+Only `b2` trains.
+
+<img src="assets/06_zero_init_gradient_block.svg" alt="Zero initialization blocks gradient flow" width="760">
+
+Why? Start from the end of the network.
+
+`b2` directly affects the logits:
+
+```python
+logits = h @ W2 + b2
+```
+
+So the loss can change `b2` immediately. That is why `b2.grad` is nonzero.
+
+But `W2` sees `h` as its input:
+
+```text
+W2.grad = h.T @ dlogits
+```
+
+Since `h = 0`, `W2.grad = 0`.
+
+Then the signal flowing backward into the hidden layer is:
+
+```text
+dh = dlogits @ W2.T
+```
+
+Since `W2 = 0`, `dh = 0`. That blocks learning for `b1`, `W1`, and `C`.
+
+So the network is not completely frozen. It is worse in a subtle way:
+
+```text
+the output bias can learn
+the hidden network cannot learn
+```
+
+The model still improves a little:
+
+```text
+dev loss at step 0    ~= 3.2958
+dev loss at step 5000 ~= 2.8219
+```
+
+But it is only learning global character frequencies through `b2`. It cannot
+use context, embeddings, or hidden features. It becomes a unigram model, not a
+real MLP.
+
+The lesson:
+
+```text
+zero initialization can give a sane first loss
+but it can destroy symmetry and block gradient flow
+```
+
+### E02: Folding BatchNorm Into The Previous Linear Layer
+
+Purpose:
+
+```text
+test whether BatchNorm is needed during inference
+```
+
+During training, BatchNorm is useful because it stabilizes activation scale. But
+during inference, BatchNorm stops using the current batch and uses fixed running
+statistics collected during training.
+
+That means BatchNorm becomes a fixed calibration step:
+
+```text
+take the raw score from Linear
+center it
+rescale it
+shift it
+```
+
+Folding means:
+
+```text
+bake that fixed calibration into the Linear layer
+```
+
+So instead of running:
+
+```text
+Linear -> BatchNorm -> output
+```
+
+we build a new Linear layer that already includes BatchNorm's effect:
+
+```text
+Calibrated Linear -> same output
+```
+
+<img src="assets/06_batchnorm_folding.svg" alt="BatchNorm folding bakes fixed calibration into Linear" width="760">
+
+Here is the same idea with made-up numbers:
+
+<img src="assets/06_batchnorm_folding_numbers.svg" alt="BatchNorm folding numeric example" width="760">
+
+In code terms, during inference BatchNorm uses fixed running statistics:
+
+```python
+y = gamma * (z - running_mean) / sqrt(running_var + eps) + beta
+```
+
+If the previous linear layer is:
+
+```python
+z = x @ W + b
+```
+
+then substitute it into BatchNorm:
+
+```text
+y = gamma * (x @ W + b - running_mean) / sqrt(running_var + eps) + beta
+```
+
+At inference, `gamma`, `beta`, `running_mean`, and `running_var` are constants.
+So this whole expression can be rewritten as another linear layer:
+
+```python
+scale = gamma / torch.sqrt(running_var + eps)
+
+W_fold = W * scale
+b_fold = (b - running_mean) * scale + beta
+```
+
+This is what "folding BatchNorm into the previous Linear layer" means:
+
+```text
+replace:
+Linear -> BatchNorm
+
+with:
+one new Linear layer whose W and b already include BatchNorm's effect
+```
+
+So the BatchNorm layer can be erased from the inference graph. We do not need to
+forward through it at test time because its computation has been absorbed into
+the preceding linear layer's weights and bias.
+
+The experiment trained:
+
+```text
+Linear -> BatchNorm -> tanh
+Linear -> BatchNorm -> tanh
+Linear -> BatchNorm
+```
+
+Then it folded each BatchNorm into the preceding Linear layer. The forward pass
+matched:
+
+```text
+dev loss with BatchNorm        ~= 2.2787638
+dev loss after folding BatchNorm ~= 2.2787638
+max logit difference             ~= 2.26e-06
+prediction agreement             = 100%
+```
+
+The tiny logit difference is just floating point roundoff.
+
+The lesson:
+
+```text
+BatchNorm stabilizes training
+but at inference, its fixed affine computation can be folded into Linear
+```
+
+Important boundary:
+
+```text
+during training:
+BatchNorm cannot be folded away, because batch mean/std change every batch
+
+during inference:
+BatchNorm can be folded away, because running mean/std are fixed constants
+```
+
 ## Recall Checks
 
 Use these to test whether the tensor flow is sticking.
