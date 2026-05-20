@@ -2122,16 +2122,701 @@ running = 0.9 * running + 0.1 * current_batch_stat
 
 The idea is the same; only the smoothing speed changes.
 
+## Reading The Diagnostic Plots
+
+The previous sections explain why initialization and BatchNorm matter. The next
+step is learning how to see these problems.
+
+The diagnostic plots below come from a small five-layer MLP version of the same
+Makemore model. The point is not to train the best name generator. The point is
+to make failure modes visible:
+
+```text
+embedding lookup
+-> Linear -> Tanh
+-> Linear -> Tanh
+-> Linear -> Tanh
+-> Linear -> Tanh
+-> Linear -> Tanh
+-> Linear -> logits
+```
+
+Why use five hidden layers instead of one? Because activation and gradient
+scale problems become easier to see when the signal has to pass through several
+layers. A one-layer MLP can often survive sloppy scale choices. A deeper stack
+exposes them.
+
+The plot generator lives at:
+
+```text
+scripts/generate_makemore_part3_diagnostic_plots.py
+```
+
+It rebuilds the small diagnostic MLP, runs short controlled experiments, and
+writes the figures into `docs/assets/`. Use whatever Python environment you use
+for the notebook; the script only needs the same core dependencies: `torch` and
+`matplotlib`.
+
+The main knobs are:
+
+| knob | what it changes | what to watch |
+| --- | --- | --- |
+| `gain` | initial weight scale for hidden Linear layers | activation spread and `tanh` saturation |
+| activation | `tanh` versus no nonlinearity | representation power and gradient flow |
+| learning rate | size of SGD updates | update:data ratio |
+| BatchNorm | normalizes pre-activations before `tanh` | saturation, gradient stability, update stability |
+| final-layer scale | initial logit scale | initial loss and final-layer ratios |
+
+The habit is:
+
+```text
+do not only watch loss
+watch the signal moving forward
+watch the gradients moving backward
+watch how large the updates are relative to the weights
+```
+
+### 1. Forward Activations: Is `tanh` Saturating?
+
+The first plot shows histograms of the hidden activations after `tanh`.
+
+Each row uses a different initialization gain:
+
+```text
+gain = 1.0
+gain = 5/3
+gain = 3.0
+```
+
+Each column is a hidden `tanh` layer.
+
+![Forward activation histograms for different tanh gains](assets/06_diagnostic_activation_gain_sweep.png)
+
+Read one panel like this:
+
+```text
+x-axis: tanh output value, from -1 to 1
+y-axis: how many activations landed there
+sat %: fraction with abs(tanh output) > 0.97
+```
+
+A healthy `tanh` layer is usually:
+
+```text
+centered near 0
+spread out enough to use the nonlinearity
+not piled up at -1 and 1
+low saturation percentage
+```
+
+The reason is the derivative:
+
+```text
+d/dx tanh(x) = 1 - tanh(x)^2
+```
+
+If `tanh(x)` is near `0`, then:
+
+```text
+1 - tanh(x)^2 ~= 1
+```
+
+The gradient passes through.
+
+If `tanh(x)` is near `1` or `-1`, then:
+
+```text
+1 - tanh(x)^2 ~= 0
+```
+
+The gradient is crushed.
+
+That is what saturation means:
+
+```text
+the neuron still outputs a number
+but changing its input barely changes its output
+so backprop receives very little local signal
+```
+
+#### What `gain=1` Does
+
+With `gain=1`, the weights are initialized conservatively:
+
+```text
+W ~ N(0, 1 / sqrt(fan_in))
+```
+
+That often avoids saturation, but in a deep stack it can make the signal too
+small. The hidden values can become narrow around zero. This is not a dramatic
+failure, but it means the network is behaving too linearly at initialization.
+
+The warning sign is:
+
+```text
+histograms are very narrow
+activations barely use the range of tanh
+gradients may shrink layer by layer
+```
+
+#### Why `gain=5/3` Is A Good Tanh Default
+
+`tanh` is contractive. It pulls values toward the middle of `[-1, 1]`.
+
+The `5/3` gain gives the Linear layer a controlled boost:
+
+```text
+W ~ N(0, (5/3) / sqrt(fan_in))
+```
+
+The goal is not to make activations large. The goal is to keep the forward
+signal alive through several nonlinear layers without throwing most values into
+the flat tails of `tanh`.
+
+A good plot looks like:
+
+```text
+roughly centered
+moderately wide
+low saturation
+similar behavior across layers
+```
+
+#### What `gain=3` Does
+
+With `gain=3`, the pre-activations get too wide.
+
+The sequence is:
+
+```text
+Linear outputs too large
+-> tanh squashes them to -1 or 1
+-> tanh derivative becomes tiny
+-> backward gradient gets weaker
+```
+
+The plot tells you this immediately:
+
+```text
+histograms pile up at the edges
+sat % rises
+many neurons are in tanh's flat region
+```
+
+This is why gain is not just a cosmetic initialization detail. It determines
+whether the activation function is operating in a useful region.
+
+### 2. Backward Gradients: Are All Layers Learning?
+
+The second plot shows histograms of the gradients arriving at each hidden
+layer's output.
+
+![Backward gradient histograms across layers](assets/06_diagnostic_gradient_comparison.png)
+
+Read one panel like this:
+
+```text
+x-axis: gradient value for that layer's output
+y-axis: how many gradient values landed there
+std: gradient standard deviation for that layer
+```
+
+The healthy pattern is not:
+
+```text
+all gradients are huge
+```
+
+The healthy pattern is:
+
+```text
+gradients have comparable scale across layers
+no layer is almost zero
+no layer is exploding relative to the others
+```
+
+If early layers have much smaller gradients than later layers, the model may
+only be training the top of the network. The embeddings and early features then
+change slowly, even though the loss technically goes down.
+
+If some layer has much wider gradients than the rest, that layer can dominate
+training. The optimizer is no longer moving the whole network in a balanced way.
+
+#### What Happens With Saturated `tanh`
+
+When `tanh` saturates, its local derivative is tiny:
+
+```text
+1 - tanh(x)^2 ~= 0
+```
+
+Backprop multiplies by this local derivative. So a saturated layer acts like a
+partial gradient blocker.
+
+The warning sign is:
+
+```text
+activation histograms show edge saturation
+gradient histograms get narrower in earlier layers
+gradient std decays as you move backward
+```
+
+This is the vanishing-gradient problem in a small, visible form.
+
+#### What Happens With No `tanh`
+
+The plot also compares an `identity` activation:
+
+```text
+Linear -> Identity -> Linear -> Identity -> ...
+```
+
+This removes `tanh` saturation, but it also removes the model's nonlinear
+depth. A stack of Linear layers with no nonlinearities is still just one Linear
+map:
+
+```text
+Linear(Linear(Linear(x))) = another Linear(x)
+```
+
+So the no-`tanh` case can look less saturated, but it is not a fix. It changes
+the model into a weaker function class.
+
+Without nonlinearities, scale can still drift through repeated matrix
+multiplication:
+
+```text
+too small -> activations diffuse toward weak signals
+too large -> activations and gradients can grow
+```
+
+The lesson is:
+
+```text
+do not remove the nonlinearity to make plots prettier
+use the plots to choose a scale where the nonlinearity works
+```
+
+### 3. Parameter Grad:Data Ratio
+
+The next plot looks at the weight parameters themselves.
+
+For each weight matrix, compute:
+
+```text
+std(parameter_gradient) / std(parameter_data)
+```
+
+Then plot:
+
+```text
+log10(std(grad) / std(data))
+```
+
+![Parameter grad:data ratio](assets/06_diagnostic_grad_data_ratio.png)
+
+This plot answers:
+
+```text
+how large is the raw gradient compared to the parameter it wants to change?
+```
+
+This does not include the learning rate yet. It only tells us how strong the
+backward signal is relative to the current parameter scale.
+
+Why this matters:
+
+```text
+tiny grad:data  -> parameter is receiving a weak learning signal
+huge grad:data  -> parameter is receiving a very strong learning signal
+uneven ratios   -> some layers may learn much faster than others
+```
+
+The plot is especially useful in deeper networks because loss can hide local
+problems. A model may appear to train because the final layer improves, while
+early layers barely move.
+
+#### Why The Last Layer Often Looks Big
+
+The final layer often has a much larger grad:data ratio.
+
+There are two reasons.
+
+First, the final layer is closest to the loss:
+
+```text
+hidden features -> final Linear -> logits -> loss
+```
+
+The loss talks to the logits directly, so the final layer receives a very direct
+gradient.
+
+Second, we intentionally initialize the final layer with very small weights:
+
+```python
+W_out = torch.randn((n_hidden, vocab_size)) * 0.01
+```
+
+That keeps the first logits near zero, which makes the first loss close to:
+
+```text
+log(vocab_size) ~= log(27) ~= 3.30
+```
+
+But it also means:
+
+```text
+std(data) is small for W_out
+```
+
+So the ratio:
+
+```text
+std(grad) / std(data)
+```
+
+can look large.
+
+This does not automatically mean:
+
+```text
+the last layer is definitely broken
+```
+
+It means:
+
+```text
+the last layer has a large raw gradient relative to its tiny initial weights
+```
+
+The next plot is more actionable because it includes the learning rate.
+
+### 4. Update:Data Ratio
+
+The update:data ratio asks:
+
+```text
+how much did SGD actually change this parameter?
+```
+
+The SGD update is:
+
+```text
+update = -learning_rate * gradient
+```
+
+So the plotted value is:
+
+```text
+log10(std(update) / std(parameter_data))
+```
+
+In code:
+
+```python
+ratio = (lr * p.grad).std() / p.data.std()
+```
+
+This is more useful than grad:data because it includes the learning rate.
+
+![Learning-rate sweep using update:data ratio](assets/06_diagnostic_update_data_lr_sweep.png)
+
+The reference line is:
+
+```text
+log10(update:data) = -3
+```
+
+That means:
+
+```text
+update:data ~= 10^-3 = 0.001
+```
+
+So the update is around `0.1%` of the parameter's scale.
+
+This is not a law of nature. It is a useful order-of-magnitude target. If the
+update is much smaller, learning can be too slow. If it is much larger, the
+optimizer may rewrite the weights too aggressively.
+
+Read the plot like this:
+
+```text
+around -3       -> small but meaningful updates
+far below -4    -> probably learning too slowly
+around -2       -> aggressive updates
+near -1 or 0    -> very aggressive, likely unstable
+```
+
+#### If The Learning Rate Is Too Low
+
+When the learning rate is too low:
+
+```text
+std(update) is tiny
+update:data sits far below -3
+loss may improve very slowly
+training looks stable but underpowered
+```
+
+This can be deceptive. Nothing explodes. The model just learns inefficiently.
+
+#### If The Learning Rate Is Too High
+
+When the learning rate is too high:
+
+```text
+std(update) is large
+update:data moves up toward -2, -1, or 0
+loss gets noisy
+parameters can overshoot useful regions
+activations may become more saturated after updates
+```
+
+This is when layers are learning too fast. The warning is not just a bad loss
+curve. The warning is that the optimizer is changing weights by too large a
+fraction of their current scale.
+
+#### Do Ratios Spike And Then Stabilize?
+
+Sometimes the early update:data ratio is temporarily high. This can happen while
+the network fixes bad initial logits or adjusts poorly scaled activations.
+
+The question is:
+
+```text
+does the ratio settle into a stable band?
+```
+
+If it spikes briefly and then returns toward a reasonable range, that may be
+fine. If it stays high, the learning rate or initialization is probably wrong.
+
+The per-parameter version shows whether one matrix is moving much faster than
+the rest:
+
+![Per-layer update:data ratio](assets/06_diagnostic_update_data_per_layer.png)
+
+A healthy plot usually has:
+
+```text
+most weight matrices in the same rough band
+no layer stuck far below the others
+no layer permanently far above the others
+curves not drifting upward over time
+```
+
+If the final layer has a higher update ratio early on, that can happen because
+it starts very small and sits close to the loss. But if it remains wildly above
+the rest, the final layer may be learning much faster than the hidden stack.
+
+That creates an unbalanced model:
+
+```text
+top layer adapts quickly
+early representations lag behind
+```
+
+### 5. What BatchNorm Changes
+
+BatchNorm is added after a Linear layer and before the nonlinearity:
+
+```text
+Linear -> BatchNorm -> Tanh
+```
+
+This placement is important. BatchNorm normalizes the hidden pre-activations,
+which are exactly the values about to enter `tanh`.
+
+Without BatchNorm:
+
+```text
+Linear scale determines whether tanh is healthy or saturated
+```
+
+With BatchNorm:
+
+```text
+Linear output
+-> normalize batch mean and variance
+-> apply learned gamma and beta
+-> tanh
+```
+
+The immediate goal is:
+
+```text
+keep tanh inputs centered and reasonably scaled
+```
+
+The learned `gamma` and `beta` give the model freedom:
+
+```text
+gamma -> learned scale
+beta  -> learned shift
+```
+
+So BatchNorm does not force every neuron to remain standard normal forever. It
+stabilizes the signal, then lets the model learn the scale and center it wants.
+
+Here is the same bad-gain case with and without BatchNorm:
+
+![BatchNorm activation comparison](assets/06_diagnostic_batchnorm_activation_compare.png)
+
+The comparison to look for:
+
+```text
+without BN:
+gain=3 pushes tanh toward saturation
+
+with BN:
+pre-activations are normalized before tanh
+histograms are less pinned to -1 and 1
+saturation percentage drops
+```
+
+BatchNorm also affects update stability:
+
+![BatchNorm update:data comparison](assets/06_diagnostic_batchnorm_update_compare.png)
+
+A good BatchNorm run usually shows:
+
+```text
+less sensitivity to bad gain
+activation histograms less saturated
+gradient histograms more even
+update:data ratios less chaotic
+training less dependent on perfect initialization
+```
+
+But BatchNorm is not magic.
+
+It adds new behavior:
+
+```text
+examples in a batch now interact through batch statistics
+training uses current batch mean/variance
+inference uses running mean/variance
+gamma and beta become learned parameters
+the preceding Linear bias becomes mostly redundant
+```
+
+Because BatchNorm subtracts the batch mean, a Linear bias immediately before
+BatchNorm is usually canceled:
+
+```text
+Linear bias shifts all examples
+BatchNorm subtracts the batch mean
+shift disappears
+BatchNorm beta becomes the useful learned shift
+```
+
+That is why many implementations use:
+
+```python
+Linear(..., bias=False)
+BatchNorm1d(...)
+Tanh()
+```
+
+### What Good Training Looks Like In These Plots
+
+When training is healthy, the plots usually tell a consistent story.
+
+Forward activations:
+
+```text
+centered
+not too narrow
+not saturated at activation boundaries
+similar enough across layers
+```
+
+Backward gradients:
+
+```text
+present in every layer
+similar scale across depth
+not vanishing in early layers
+not exploding in one layer
+```
+
+Grad:data:
+
+```text
+raw gradient signal exists for all important parameters
+ratios are not wildly uneven
+final layer may be higher because it is small and close to the loss
+```
+
+Update:data:
+
+```text
+learning-rate-adjusted updates are small but meaningful
+roughly around 1e-3 as an order-of-magnitude check
+not stuck near zero
+not rewriting weights too aggressively
+not one layer permanently much faster than all others
+```
+
+BatchNorm:
+
+```text
+reduces sensitivity to initialization gain
+keeps pre-activation scale controlled
+helps gradients stay usable across depth
+does not remove the need to monitor update size
+```
+
+The practical debugging loop is:
+
+```text
+1. Check initial loss.
+   If it is much larger than log(vocab_size), inspect logits.
+
+2. Plot forward activations.
+   If tanh is saturated, reduce gain or add normalization.
+
+3. Plot gradients.
+   If early gradients vanish, inspect saturation and depth.
+
+4. Plot grad:data.
+   If one parameter receives a very different raw signal, understand why.
+
+5. Plot update:data.
+   If updates are too small or too large, tune learning rate.
+
+6. Add BatchNorm when scale drift across layers is hard to control manually.
+```
+
+This turns neural-network training from:
+
+```text
+try a hyperparameter and hope
+```
+
+into:
+
+```text
+look at the signal
+identify the failure mode
+change the knob that controls that failure mode
+```
+
 ## Exercises: What Breaks And What Can Be Removed
 
 These small experiments are useful because they separate what looks possible in
 the equations from what actually gets gradient signal.
 
-The runnable script is:
+The exercise implementation lives at:
 
-```bash
-.venv/bin/python scripts/makemore_part3_exercises.py
+```text
+scripts/makemore_part3_exercises.py
 ```
+
+It contains two small experiments: one that zero-initializes the MLP weights to
+show how gradient flow breaks, and one that folds BatchNorm into the previous
+Linear layer to show why inference-time BatchNorm can be erased. Run it with the
+same Python environment you use for the notebook.
 
 ### E01: Zero-Initialize The MLP Weights And Biases
 
