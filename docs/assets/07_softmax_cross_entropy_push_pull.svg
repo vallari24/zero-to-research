@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="430" viewBox="0 0 960 430" role="img" aria-labelledby="title desc">
+  <title id="title">Softmax cross-entropy push and pull intuition</title>
+  <desc id="desc">A diagram showing dlogits equals prediction minus one-hot answer. Wrong classes have positive gradients and are pushed down. The correct class has a negative gradient and is pushed up. The row sum is zero.</desc>
+
+  <rect width="960" height="430" fill="#ffffff" />
+
+  <text x="40" y="48" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#111827">
+    Softmax cross-entropy gradient
+  </text>
+  <text x="40" y="82" font-family="Arial, sans-serif" font-size="18" fill="#374151">
+    dlogits = prediction - answer
+  </text>
+
+  <g font-family="Arial, sans-serif">
+    <rect x="40" y="112" width="260" height="84" rx="8" fill="#f9fafb" stroke="#d0d5dd" />
+    <text x="60" y="140" font-size="16" font-weight="700" fill="#344054">prediction</text>
+    <text x="60" y="174" font-family="Consolas, monospace" font-size="19" fill="#111827">[0.70, 0.20, 0.10]</text>
+
+    <text x="326" y="166" font-size="30" font-weight="700" fill="#111827">-</text>
+
+    <rect x="370" y="112" width="240" height="84" rx="8" fill="#f9fafb" stroke="#d0d5dd" />
+    <text x="390" y="140" font-size="16" font-weight="700" fill="#344054">answer</text>
+    <text x="390" y="174" font-family="Consolas, monospace" font-size="19" fill="#111827">[0.00, 1.00, 0.00]</text>
+
+    <text x="636" y="166" font-size="30" font-weight="700" fill="#111827">=</text>
+
+    <rect x="690" y="112" width="230" height="84" rx="8" fill="#f9fafb" stroke="#d0d5dd" />
+    <text x="710" y="140" font-size="16" font-weight="700" fill="#344054">dlogits</text>
+    <text x="710" y="174" font-family="Consolas, monospace" font-size="18" fill="#111827">[+.70, -.80, +.10]</text>
+  </g>
+
+  <g font-family="Arial, sans-serif" text-anchor="middle">
+    <text x="160" y="238" font-size="18" font-weight="700" fill="#b42318">wrong class</text>
+    <line x1="160" y1="252" x2="160" y2="318" stroke="#b42318" stroke-width="6" />
+    <polygon points="160,340 136,306 184,306" fill="#b42318" />
+    <text x="160" y="366" font-size="15" fill="#344054">+ gradient</text>
+    <text x="160" y="388" font-size="15" fill="#344054">logit goes down</text>
+
+    <text x="480" y="238" font-size="18" font-weight="700" fill="#067647">correct class</text>
+    <polygon points="480,252 456,286 504,286" fill="#067647" />
+    <line x1="480" y1="274" x2="480" y2="340" stroke="#067647" stroke-width="6" />
+    <rect x="350" y="310" width="260" height="42" rx="8" fill="#ecfdf3" stroke="#a6f4c5" />
+    <text x="480" y="337" font-size="15" fill="#05603a">- gradient, logit goes up</text>
+
+    <text x="800" y="238" font-size="18" font-weight="700" fill="#b42318">wrong class</text>
+    <line x1="800" y1="252" x2="800" y2="298" stroke="#b42318" stroke-width="6" />
+    <polygon points="800,320 776,286 824,286" fill="#b42318" />
+    <text x="800" y="346" font-size="15" fill="#344054">small + gradient</text>
+    <text x="800" y="368" font-size="15" fill="#344054">small push down</text>
+  </g>
+
+  <rect x="360" y="372" width="240" height="36" rx="8" fill="#f9fafb" stroke="#d0d5dd" />
+  <text x="480" y="395" font-family="Arial, sans-serif" font-size="15" text-anchor="middle" fill="#344054">
+    row sum: sum(probs) - 1 = 0
+  </text>
+</svg>

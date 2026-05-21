@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="560" viewBox="0 0 1040 560" role="img" aria-labelledby="title desc">
+  <title id="title">BatchNorm backward flow</title>
+  <desc id="desc">A diagram showing forward BatchNorm paths and backward gradient paths through the direct, mean, and variance branches.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.6; }
+      .stat { fill: #eff6ff; stroke: #93c5fd; stroke-width: 1.6; }
+      .norm { fill: #ecfdf5; stroke: #86efac; stroke-width: 1.6; }
+      .out { fill: #fff7ed; stroke: #fdba74; stroke-width: 1.6; }
+      .ink { fill: #111827; }
+      .muted { fill: #4b5563; }
+      .blue { fill: #1d4ed8; }
+      .green { fill: #047857; }
+      .orange { fill: #c2410c; }
+      .red { fill: #b91c1c; }
+      .fwd { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .back { stroke: #dc2626; stroke-width: 2.4; fill: none; marker-end: url(#arrowRed); }
+      .soft { stroke: #94a3b8; stroke-width: 1.5; stroke-dasharray: 6 6; fill: none; }
+      .title { font: 800 26px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .label { font: 800 17px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .text { font: 600 15px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 600 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1040" height="560" rx="20"/>
+  <text class="title ink" x="34" y="48">BatchNorm backward: dx is the sum of three paths</text>
+  <text class="text muted" x="34" y="78">One input column x creates batch mean, batch variance, normalized values, then output y.</text>
+
+  <rect class="card" x="54" y="215" width="135" height="90" rx="10"/>
+  <text class="label ink" x="96" y="252">x</text>
+  <text class="small muted" x="78" y="280">batch column</text>
+
+  <rect class="stat" x="285" y="115" width="155" height="72" rx="10"/>
+  <text class="label blue" x="332" y="146">mu_B</text>
+  <text class="small muted" x="309" y="169">mean of x</text>
+
+  <rect class="stat" x="285" y="244" width="155" height="72" rx="10"/>
+  <text class="label blue" x="318" y="275">sigma_B^2</text>
+  <text class="small muted" x="314" y="298">variance of x</text>
+
+  <rect class="card" x="285" y="373" width="155" height="72" rx="10"/>
+  <text class="label ink" x="316" y="404">x - mu_B</text>
+  <text class="small muted" x="326" y="427">centered</text>
+
+  <rect class="norm" x="555" y="244" width="155" height="72" rx="10"/>
+  <text class="label green" x="607" y="275">xhat</text>
+  <text class="small muted" x="582" y="298">normalize</text>
+
+  <rect class="out" x="805" y="244" width="170" height="72" rx="10"/>
+  <text class="label orange" x="830" y="271">y = gamma*xhat</text>
+  <text class="label orange" x="858" y="294">+ beta</text>
+  <text class="small muted" x="849" y="312">scale and shift</text>
+
+  <path class="fwd" d="M189 252 C230 216 245 165 283 151"/>
+  <path class="fwd" d="M189 260 C226 266 244 277 283 280"/>
+  <path class="fwd" d="M189 286 C231 345 243 397 283 409"/>
+  <path class="fwd" d="M440 151 C500 160 516 239 553 264"/>
+  <path class="fwd" d="M440 280 L553 280"/>
+  <path class="fwd" d="M440 409 C500 400 516 320 553 296"/>
+  <path class="fwd" d="M710 280 L803 280"/>
+
+  <text class="mono muted" x="214" y="105">forward: compute batch stats</text>
+  <text class="mono muted" x="485" y="226">use stats</text>
+  <text class="mono muted" x="747" y="226">learned scale</text>
+
+  <rect class="card" x="805" y="407" width="170" height="70" rx="10"/>
+  <text class="label red" x="862" y="436">dY</text>
+  <text class="small muted" x="834" y="459">upstream gradient</text>
+
+  <rect class="card" x="54" y="407" width="175" height="70" rx="10"/>
+  <text class="label red" x="92" y="436">dX</text>
+  <text class="small muted" x="78" y="459">add all paths</text>
+
+  <path class="back" d="M805 442 C715 442 685 338 635 318"/>
+  <text class="small red" x="667" y="391">through gamma</text>
+
+  <path class="back" d="M555 316 C470 352 350 456 229 442"/>
+  <text class="small red" x="358" y="468">direct: local slope invstd</text>
+
+  <path class="back" d="M555 280 C500 248 486 151 440 151"/>
+  <path class="back" d="M285 151 C230 178 217 328 229 426"/>
+  <text class="small red" x="458" y="139">mean correction</text>
+
+  <path class="back" d="M555 296 C501 307 486 280 440 280"/>
+  <path class="back" d="M285 280 C235 300 215 360 229 426"/>
+  <text class="small red" x="458" y="333">variance correction</text>
+
+  <line class="soft" x1="34" y1="354" x2="1006" y2="354"/>
+  <text class="mono ink" x="34" y="525">Memory: fork in forward means add in backward. BatchNorm forks x into direct, mean, and variance paths.</text>
+</svg>
