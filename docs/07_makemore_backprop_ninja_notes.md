@@ -2248,16 +2248,19 @@ That is why `dx_i` depends on the whole batch, not just example `i`.
 For the usual textbook variance with `1 / m`, the compact result is:
 
 $$
+\begin{aligned}
 \frac{\partial L}{\partial x_i}
-=
+&=
 \gamma(\sigma_B^2+\epsilon)^{-1/2}
-\left[
+\Bigg[
 \frac{\partial L}{\partial y_i}
-- \frac{1}{m}\sum_{j=1}^{m}\frac{\partial L}{\partial y_j}
+- \frac{1}{m}\sum_{j=1}^{m}\frac{\partial L}{\partial y_j} \\
+&\qquad
 - \hat{x}_i
   \frac{1}{m}\sum_{j=1}^{m}
   \frac{\partial L}{\partial y_j}\hat{x}_j
-\right]
+\Bigg]
+\end{aligned}
 $$
 
 Read the bracket as three forces:
@@ -2268,13 +2271,26 @@ direct force
 - variance/alignment force
 ```
 
-For the exercise version with unbiased variance, only the last force changes:
+For the exercise version with unbiased variance, the complete formula is:
 
 $$
+\begin{aligned}
+\frac{\partial L}{\partial x_i}
+&=
+\gamma(\sigma_B^2+\epsilon)^{-1/2}
+\Bigg[
+\frac{\partial L}{\partial y_i}
+- \frac{1}{n}\sum_{j=1}^{n}\frac{\partial L}{\partial y_j} \\
+&\qquad
 - \frac{n}{n-1}\hat{x}_i
   \frac{1}{n}\sum_{j=1}^{n}
   \frac{\partial L}{\partial y_j}\hat{x}_j
+\Bigg]
+\end{aligned}
 $$
+
+Compared with the textbook version, only the last force gains the
+`n / (n - 1)` correction.
 
 In tensor code, with sums over the batch axis:
 
