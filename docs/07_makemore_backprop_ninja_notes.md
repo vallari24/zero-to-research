@@ -2247,7 +2247,7 @@ That is why `dx_i` depends on the whole batch, not just example `i`.
 
 For the usual textbook variance with `1 / m`, the compact result is:
 
-$$
+```math
 \begin{aligned}
 \frac{\partial L}{\partial x_i}
 &=
@@ -2261,7 +2261,7 @@ $$
   \frac{\partial L}{\partial y_j}\hat{x}_j
 \Bigg]
 \end{aligned}
-$$
+```
 
 Read the bracket as three forces:
 
@@ -2273,7 +2273,7 @@ direct force
 
 For the exercise version with unbiased variance, the complete formula is:
 
-$$
+```math
 \begin{aligned}
 \frac{\partial L}{\partial x_i}
 &=
@@ -2287,7 +2287,7 @@ $$
   \frac{\partial L}{\partial y_j}\hat{x}_j
 \Bigg]
 \end{aligned}
-$$
+```
 
 Compared with the textbook version, only the last force gains the
 `n / (n - 1)` correction.
