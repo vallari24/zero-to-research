@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 710" role="img" aria-labelledby="title desc">
+  <title id="title">Convolution as a built-in sliding Linear layer</title>
+  <desc id="desc">A convolution takes overlapping neighboring windows, applies the same learned Linear-like weights to each window, and produces one output vector per window.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .token { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.6; }
+      .window { fill: #fff7ed; fill-opacity: 0.52; stroke: #fb923c; stroke-width: 2; }
+      .blue-card { fill: #eff6ff; stroke: #60a5fa; stroke-width: 1.8; }
+      .green-card { fill: #ecfdf5; stroke: #34d399; stroke-width: 1.8; }
+      .violet-card { fill: #f5f3ff; stroke: #a78bfa; stroke-width: 1.8; }
+      .line { stroke: #64748b; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .orange-line { stroke: #ea580c; stroke-width: 2.4; fill: none; marker-end: url(#orange-arrow); }
+      .ink { fill: #111827; }
+      .muted { fill: #4b5563; }
+      .blue { fill: #1d4ed8; }
+      .green { fill: #047857; }
+      .orange { fill: #c2410c; }
+      .purple { fill: #6d28d9; }
+      .title { font: 800 27px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .text { font: 600 16px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 600 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 700 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="orange-arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ea580c"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1240" height="710" rx="20"/>
+  <text class="title ink" x="34" y="48">Convolution: one shared Linear-like rule slides across positions</text>
+  <text class="text muted" x="34" y="78">The input numbers do not move. The local window selector moves to the next neighboring slice.</text>
+
+  <text class="mono ink" x="54" y="154">embedded sequence</text>
+  <g>
+    <rect class="token" x="244" y="118" width="64" height="64" rx="10"/>
+    <rect class="token" x="320" y="118" width="64" height="64" rx="10"/>
+    <rect class="token" x="396" y="118" width="64" height="64" rx="10"/>
+    <rect class="token" x="472" y="118" width="64" height="64" rx="10"/>
+    <rect class="token" x="548" y="118" width="64" height="64" rx="10"/>
+    <rect class="token" x="624" y="118" width="64" height="64" rx="10"/>
+    <rect class="token" x="700" y="118" width="64" height="64" rx="10"/>
+    <rect class="token" x="776" y="118" width="64" height="64" rx="10"/>
+    <text class="mono ink" x="270" y="156">a</text>
+    <text class="mono ink" x="346" y="156">b</text>
+    <text class="mono ink" x="422" y="156">c</text>
+    <text class="mono ink" x="498" y="156">d</text>
+    <text class="mono ink" x="574" y="156">e</text>
+    <text class="mono ink" x="650" y="156">f</text>
+    <text class="mono ink" x="726" y="156">g</text>
+    <text class="mono ink" x="802" y="156">h</text>
+  </g>
+
+  <rect class="window" x="236" y="108" width="156" height="84" rx="14"/>
+  <rect class="window" x="312" y="222" width="156" height="84" rx="14"/>
+  <rect class="window" x="388" y="336" width="156" height="84" rx="14"/>
+  <text class="mono orange" x="265" y="212">window 1: [a b]</text>
+  <text class="mono orange" x="341" y="326">window 2: [b c]</text>
+  <text class="mono orange" x="417" y="440">window 3: [c d]</text>
+
+  <path class="orange-line" d="M314 192 L314 238"/>
+  <path class="orange-line" d="M390 306 L390 352"/>
+  <path class="orange-line" d="M466 420 L466 478"/>
+
+  <rect class="blue-card" x="214" y="482" width="228" height="92" rx="11"/>
+  <text class="mono blue" x="250" y="516">concat window</text>
+  <text class="mono ink" x="278" y="546">[10] + [10]</text>
+  <text class="small muted" x="276" y="564">20 input numbers</text>
+
+  <path class="line" d="M442 528 L514 528"/>
+  <rect class="violet-card" x="520" y="482" width="238" height="92" rx="11"/>
+  <text class="mono purple" x="566" y="516">same learned weights</text>
+  <text class="mono ink" x="560" y="546">[20] @ [20, 200]</text>
+  <text class="small muted" x="570" y="564">reused at every position</text>
+
+  <path class="line" d="M758 528 L830 528"/>
+  <rect class="green-card" x="836" y="482" width="208" height="92" rx="11"/>
+  <text class="mono green" x="884" y="516">one output</text>
+  <text class="mono ink" x="908" y="546">[200]</text>
+  <text class="small muted" x="873" y="564">for that window</text>
+
+  <rect class="blue-card" x="54" y="614" width="508" height="64" rx="10"/>
+  <text class="mono blue" x="78" y="644">manual loop: window_ab, window_bc, window_cd, ...</text>
+  <text class="small muted" x="78" y="664">same operation repeated in Python</text>
+
+  <rect class="green-card" x="624" y="614" width="562" height="64" rx="10"/>
+  <text class="mono green" x="648" y="644">convolution: all windows processed by one tensor operation</text>
+  <text class="small muted" x="648" y="664">same weights, faster implementation</text>
+
+  <text class="small muted" x="882" y="146">With causal padding,</text>
+  <text class="small muted" x="882" y="166">the stack can keep one</text>
+  <text class="small muted" x="882" y="186">output per input position.</text>
+</svg>

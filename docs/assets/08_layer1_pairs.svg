@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 390" role="img" aria-labelledby="title desc">
+  <title id="title">Layer 1 summarizes four neighboring character pairs</title>
+  <desc id="desc">Eight embedded characters are paired into four learned summaries using the same W1 weights.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .input { fill: #eff6ff; stroke: #93c5fd; stroke-width: 1.5; }
+      .out { fill: #ecfdf5; stroke: #86efac; stroke-width: 1.5; }
+      .ink { fill: #111827; }
+      .muted { fill: #4b5563; }
+      .blue { fill: #1d4ed8; }
+      .green { fill: #047857; }
+      .line { stroke: #94a3b8; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .title { font: 800 25px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .text { font: 600 15px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 600 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .char { font: 800 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1120" height="390" rx="20"/>
+  <text class="title ink" x="32" y="46">Layer 1: turn eight character vectors into four pair summaries</text>
+  <text class="text muted" x="32" y="74">The same learned transformation W1 is reused for every pair.</text>
+
+  <g>
+    <rect class="input" x="110" y="112" width="66" height="54" rx="9"/>
+    <rect class="input" x="222" y="112" width="66" height="54" rx="9"/>
+    <rect class="input" x="366" y="112" width="66" height="54" rx="9"/>
+    <rect class="input" x="478" y="112" width="66" height="54" rx="9"/>
+    <rect class="input" x="622" y="112" width="66" height="54" rx="9"/>
+    <rect class="input" x="734" y="112" width="66" height="54" rx="9"/>
+    <rect class="input" x="878" y="112" width="66" height="54" rx="9"/>
+    <rect class="input" x="990" y="112" width="66" height="54" rx="9"/>
+    <text class="char blue" x="136" y="146">a</text>
+    <text class="char blue" x="248" y="146">b</text>
+    <text class="char blue" x="392" y="146">c</text>
+    <text class="char blue" x="504" y="146">d</text>
+    <text class="char blue" x="648" y="146">e</text>
+    <text class="char blue" x="760" y="146">f</text>
+    <text class="char blue" x="904" y="146">g</text>
+    <text class="char blue" x="1016" y="146">h</text>
+  </g>
+
+  <g>
+    <path class="line" d="M143 168 L199 232"/>
+    <path class="line" d="M255 168 L199 232"/>
+    <path class="line" d="M399 168 L455 232"/>
+    <path class="line" d="M511 168 L455 232"/>
+    <path class="line" d="M655 168 L711 232"/>
+    <path class="line" d="M767 168 L711 232"/>
+    <path class="line" d="M911 168 L967 232"/>
+    <path class="line" d="M1023 168 L967 232"/>
+    <rect class="out" x="124" y="236" width="150" height="66" rx="10"/>
+    <rect class="out" x="380" y="236" width="150" height="66" rx="10"/>
+    <rect class="out" x="636" y="236" width="150" height="66" rx="10"/>
+    <rect class="out" x="892" y="236" width="150" height="66" rx="10"/>
+    <text class="mono green" x="147" y="264">summary_ab</text>
+    <text class="mono green" x="403" y="264">summary_cd</text>
+    <text class="mono green" x="659" y="264">summary_ef</text>
+    <text class="mono green" x="915" y="264">summary_gh</text>
+    <text class="small muted" x="158" y="286">200 features</text>
+    <text class="small muted" x="414" y="286">200 features</text>
+    <text class="small muted" x="670" y="286">200 features</text>
+    <text class="small muted" x="926" y="286">200 features</text>
+  </g>
+
+  <text class="mono ink" x="32" y="356">W1 is shared: the network learns one rule for summarizing any neighboring character pair.</text>
+</svg>

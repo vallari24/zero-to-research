@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 700" role="img" aria-labelledby="title desc">
+  <title id="title">A WaveNet-style character model forward pass</title>
+  <desc id="desc">The context characters a through h are embedded, passed through causal dilated residual blocks, combined through skip outputs, and converted into 27 logits for the next character.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .token { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.6; }
+      .blue-card { fill: #eff6ff; stroke: #60a5fa; stroke-width: 1.8; }
+      .green-card { fill: #ecfdf5; stroke: #34d399; stroke-width: 1.8; }
+      .violet-card { fill: #f5f3ff; stroke: #a78bfa; stroke-width: 1.8; }
+      .amber-card { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.8; }
+      .line { stroke: #64748b; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .skip { stroke: #059669; stroke-width: 2.4; fill: none; marker-end: url(#green-arrow); }
+      .ink { fill: #111827; }
+      .muted { fill: #4b5563; }
+      .blue { fill: #1d4ed8; }
+      .green { fill: #047857; }
+      .amber { fill: #b45309; }
+      .title { font: 800 27px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .text { font: 600 16px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 600 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 700 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="green-arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#059669"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1240" height="700" rx="20"/>
+  <text class="title ink" x="34" y="48">Character-model analogy: use the same WaveNet machinery to predict the next letter</text>
+  <text class="text muted" x="34" y="78">Unlike the visible 8 -&gt; 4 -&gt; 2 -&gt; 1 tree, a convolutional stack keeps a feature vector at every position.</text>
+
+  <text class="mono ink" x="44" y="163">context</text>
+  <g>
+    <rect class="token" x="168" y="128" width="58" height="58" rx="10"/>
+    <rect class="token" x="238" y="128" width="58" height="58" rx="10"/>
+    <rect class="token" x="308" y="128" width="58" height="58" rx="10"/>
+    <rect class="token" x="378" y="128" width="58" height="58" rx="10"/>
+    <rect class="token" x="448" y="128" width="58" height="58" rx="10"/>
+    <rect class="token" x="518" y="128" width="58" height="58" rx="10"/>
+    <rect class="token" x="588" y="128" width="58" height="58" rx="10"/>
+    <rect class="token" x="658" y="128" width="58" height="58" rx="10"/>
+    <text class="mono ink" x="192" y="164">a</text>
+    <text class="mono ink" x="262" y="164">b</text>
+    <text class="mono ink" x="332" y="164">c</text>
+    <text class="mono ink" x="402" y="164">d</text>
+    <text class="mono ink" x="472" y="164">e</text>
+    <text class="mono ink" x="542" y="164">f</text>
+    <text class="mono ink" x="612" y="164">g</text>
+    <text class="mono ink" x="682" y="164">h</text>
+  </g>
+
+  <path class="line" d="M442 186 L442 236"/>
+  <rect class="blue-card" x="318" y="242" width="248" height="74" rx="11"/>
+  <text class="mono blue" x="373" y="274">embedding sequence</text>
+  <text class="small muted" x="370" y="298">one feature vector per position</text>
+
+  <path class="line" d="M566 279 L640 279"/>
+  <rect class="blue-card" x="646" y="228" width="206" height="102" rx="11"/>
+  <text class="mono blue" x="682" y="260">residual block 1</text>
+  <text class="small muted" x="704" y="284">dilation = 1</text>
+  <text class="small muted" x="671" y="308">local context, gated update</text>
+
+  <path class="line" d="M852 279 L920 279"/>
+  <rect class="blue-card" x="926" y="228" width="206" height="102" rx="11"/>
+  <text class="mono blue" x="962" y="260">residual block 2</text>
+  <text class="small muted" x="984" y="284">dilation = 2</text>
+  <text class="small muted" x="946" y="308">broader context, gated update</text>
+
+  <path class="line" d="M1029 330 L1029 385"/>
+  <rect class="blue-card" x="926" y="391" width="206" height="102" rx="11"/>
+  <text class="mono blue" x="962" y="423">residual block 3</text>
+  <text class="small muted" x="984" y="447">dilation = 4</text>
+  <text class="small muted" x="947" y="471">full context, gated update</text>
+
+  <path class="skip" d="M749 330 L749 546 L824 546"/>
+  <path class="skip" d="M1132 279 L1168 279 L1168 500 L938 500 L938 520"/>
+  <path class="skip" d="M926 442 L900 442 L900 520"/>
+  <rect class="green-card" x="830" y="526" width="166" height="74" rx="11"/>
+  <text class="mono green" x="868" y="558">sum skips</text>
+  <text class="small muted" x="858" y="582">all three depths</text>
+
+  <path class="line" d="M996 563 L1054 563"/>
+  <rect class="violet-card" x="1060" y="516" width="152" height="94" rx="11"/>
+  <text class="mono ink" x="1090" y="550">27 logits</text>
+  <text class="small muted" x="1084" y="575">"." + 26 letters</text>
+  <text class="small muted" x="1098" y="596">predict "i"</text>
+
+  <rect class="amber-card" x="44" y="526" width="674" height="100" rx="11"/>
+  <text class="mono amber" x="70" y="560">Every residual block still stores a sequence.</text>
+  <text class="text muted" x="70" y="590">Depth changes how much history each position can understand.</text>
+
+  <text class="small muted" x="44" y="668">The model still makes one next-character prediction. Residual and skip routes make a much deeper sequence model easier to optimize.</text>
+</svg>

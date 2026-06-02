@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 680" role="img" aria-labelledby="title desc">
+  <title id="title">Simplified WaveNet receptive-field graph</title>
+  <desc id="desc">Eight time positions remain visible at every hidden layer. Highlighted causal dilated connections show how a prediction for x9 can depend on inputs x1 through x8.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .guide { stroke: #e5e7eb; stroke-width: 1.5; stroke-dasharray: 5 6; }
+      .edge { stroke: #60a5fa; stroke-width: 2.5; fill: none; }
+      .node { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+      .active { fill: #eff6ff; stroke: #60a5fa; stroke-width: 2; }
+      .input { fill: #dbeafe; stroke: #3b82f6; stroke-width: 2; }
+      .output { fill: #ecfdf5; stroke: #34d399; stroke-width: 2.5; }
+      .ink { fill: #111827; }
+      .muted { fill: #4b5563; }
+      .blue { fill: #1d4ed8; }
+      .green { fill: #047857; }
+      .title { font: 800 25px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .text { font: 600 15px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 600 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1120" height="680" rx="20"/>
+  <text class="title ink" x="32" y="46">WaveNet: keep the sequence, expand the receptive field with depth</text>
+  <text class="text muted" x="32" y="74">Colored edges trace one prediction. Gray nodes show that every time position still exists at every layer.</text>
+
+  <line class="guide" x1="238" y1="124" x2="938" y2="124"/>
+  <line class="guide" x1="238" y1="224" x2="938" y2="224"/>
+  <line class="guide" x1="238" y1="334" x2="938" y2="334"/>
+  <line class="guide" x1="238" y1="444" x2="938" y2="444"/>
+  <line class="guide" x1="238" y1="554" x2="938" y2="554"/>
+
+  <text class="mono green" x="58" y="129">output</text>
+  <text class="mono blue" x="58" y="229">dilation 4</text>
+  <text class="mono blue" x="58" y="339">dilation 2</text>
+  <text class="mono blue" x="58" y="449">dilation 1</text>
+  <text class="mono ink" x="58" y="559">input</text>
+
+  <!-- Highlighted causal paths for the rightmost output. -->
+  <line class="edge" x1="280" y1="539" x2="370" y2="459"/>
+  <line class="edge" x1="370" y1="539" x2="370" y2="459"/>
+  <line class="edge" x1="460" y1="539" x2="550" y2="459"/>
+  <line class="edge" x1="550" y1="539" x2="550" y2="459"/>
+  <line class="edge" x1="640" y1="539" x2="730" y2="459"/>
+  <line class="edge" x1="730" y1="539" x2="730" y2="459"/>
+  <line class="edge" x1="820" y1="539" x2="910" y2="459"/>
+  <line class="edge" x1="910" y1="539" x2="910" y2="459"/>
+
+  <line class="edge" x1="370" y1="429" x2="550" y2="349"/>
+  <line class="edge" x1="550" y1="429" x2="550" y2="349"/>
+  <line class="edge" x1="730" y1="429" x2="910" y2="349"/>
+  <line class="edge" x1="910" y1="429" x2="910" y2="349"/>
+
+  <line class="edge" x1="550" y1="319" x2="910" y2="239"/>
+  <line class="edge" x1="910" y1="319" x2="910" y2="239"/>
+  <line class="edge" x1="910" y1="209" x2="910" y2="139"/>
+
+  <!-- Output row. -->
+  <circle class="node" cx="280" cy="124" r="15"/>
+  <circle class="node" cx="370" cy="124" r="15"/>
+  <circle class="node" cx="460" cy="124" r="15"/>
+  <circle class="node" cx="550" cy="124" r="15"/>
+  <circle class="node" cx="640" cy="124" r="15"/>
+  <circle class="node" cx="730" cy="124" r="15"/>
+  <circle class="node" cx="820" cy="124" r="15"/>
+  <circle class="output" cx="910" cy="124" r="17"/>
+  <text class="mono green" x="950" y="120">predict x9</text>
+  <text class="small muted" x="950" y="142">using x1..x8</text>
+
+  <!-- Dilation 4 row. -->
+  <circle class="node" cx="280" cy="224" r="15"/>
+  <circle class="node" cx="370" cy="224" r="15"/>
+  <circle class="node" cx="460" cy="224" r="15"/>
+  <circle class="node" cx="550" cy="224" r="15"/>
+  <circle class="node" cx="640" cy="224" r="15"/>
+  <circle class="node" cx="730" cy="224" r="15"/>
+  <circle class="node" cx="820" cy="224" r="15"/>
+  <circle class="active" cx="910" cy="224" r="15"/>
+
+  <!-- Dilation 2 row. -->
+  <circle class="node" cx="280" cy="334" r="15"/>
+  <circle class="node" cx="370" cy="334" r="15"/>
+  <circle class="node" cx="460" cy="334" r="15"/>
+  <circle class="active" cx="550" cy="334" r="15"/>
+  <circle class="node" cx="640" cy="334" r="15"/>
+  <circle class="node" cx="730" cy="334" r="15"/>
+  <circle class="node" cx="820" cy="334" r="15"/>
+  <circle class="active" cx="910" cy="334" r="15"/>
+
+  <!-- Dilation 1 row. -->
+  <circle class="node" cx="280" cy="444" r="15"/>
+  <circle class="active" cx="370" cy="444" r="15"/>
+  <circle class="node" cx="460" cy="444" r="15"/>
+  <circle class="active" cx="550" cy="444" r="15"/>
+  <circle class="node" cx="640" cy="444" r="15"/>
+  <circle class="active" cx="730" cy="444" r="15"/>
+  <circle class="node" cx="820" cy="444" r="15"/>
+  <circle class="active" cx="910" cy="444" r="15"/>
+
+  <!-- Input row. -->
+  <circle class="input" cx="280" cy="554" r="15"/>
+  <circle class="input" cx="370" cy="554" r="15"/>
+  <circle class="input" cx="460" cy="554" r="15"/>
+  <circle class="input" cx="550" cy="554" r="15"/>
+  <circle class="input" cx="640" cy="554" r="15"/>
+  <circle class="input" cx="730" cy="554" r="15"/>
+  <circle class="input" cx="820" cy="554" r="15"/>
+  <circle class="input" cx="910" cy="554" r="15"/>
+  <text class="mono blue" x="270" y="590">x1</text>
+  <text class="mono blue" x="360" y="590">x2</text>
+  <text class="mono blue" x="450" y="590">x3</text>
+  <text class="mono blue" x="540" y="590">x4</text>
+  <text class="mono blue" x="630" y="590">x5</text>
+  <text class="mono blue" x="720" y="590">x6</text>
+  <text class="mono blue" x="810" y="590">x7</text>
+  <text class="mono blue" x="900" y="590">x8</text>
+
+  <text class="mono ink" x="32" y="638">receptive field: 2 inputs -&gt; 4 inputs -&gt; 8 inputs</text>
+  <text class="text muted" x="510" y="638">Each layer applies one shared local rule across all time positions.</text>
+</svg>

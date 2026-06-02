@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 650" role="img" aria-labelledby="title desc">
+  <title id="title">WaveNet skip outputs are summed before the output head</title>
+  <desc id="desc">Three residual blocks pass updated states upward. Each block also emits a skip contribution. The skip contributions are added element by element, processed by a small output head, and transformed into next-character scores.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .block { fill: #eff6ff; stroke: #60a5fa; stroke-width: 1.8; }
+      .skip-card { fill: #ecfdf5; stroke: #34d399; stroke-width: 1.8; }
+      .out { fill: #f5f3ff; stroke: #a78bfa; stroke-width: 1.8; }
+      .circle { fill: #ffffff; stroke: #059669; stroke-width: 2.2; }
+      .line { stroke: #64748b; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .skip { stroke: #059669; stroke-width: 2.5; fill: none; marker-end: url(#green-arrow); }
+      .ink { fill: #111827; }
+      .muted { fill: #4b5563; }
+      .blue { fill: #1d4ed8; }
+      .green { fill: #047857; }
+      .title { font: 800 27px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .text { font: 600 16px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 600 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 700 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .symbol { font: 800 25px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="green-arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#059669"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1240" height="650" rx="20"/>
+  <text class="title ink" x="34" y="48">Skip outputs: let the final prediction listen to every depth</text>
+  <text class="text muted" x="34" y="78">Early blocks see local patterns. Deeper blocks see broader context. Their contributions are added element by element.</text>
+
+  <rect class="block" x="70" y="456" width="198" height="82" rx="11"/>
+  <text class="mono blue" x="108" y="490">residual block 1</text>
+  <text class="small muted" x="104" y="516">short-range patterns</text>
+
+  <path class="line" d="M169 456 L169 404"/>
+  <rect class="block" x="70" y="316" width="198" height="82" rx="11"/>
+  <text class="mono blue" x="108" y="350">residual block 2</text>
+  <text class="small muted" x="108" y="376">wider context</text>
+
+  <path class="line" d="M169 316 L169 264"/>
+  <rect class="block" x="70" y="176" width="198" height="82" rx="11"/>
+  <text class="mono blue" x="108" y="210">residual block 3</text>
+  <text class="small muted" x="105" y="236">broader context</text>
+
+  <path class="skip" d="M268 217 L434 217"/>
+  <path class="skip" d="M268 357 L434 357"/>
+  <path class="skip" d="M268 497 L434 497"/>
+  <rect class="skip-card" x="442" y="184" width="136" height="66" rx="10"/>
+  <rect class="skip-card" x="442" y="324" width="136" height="66" rx="10"/>
+  <rect class="skip-card" x="442" y="464" width="136" height="66" rx="10"/>
+  <text class="mono green" x="489" y="222">s3</text>
+  <text class="mono green" x="489" y="362">s2</text>
+  <text class="mono green" x="489" y="502">s1</text>
+
+  <path class="skip" d="M578 217 L680 329"/>
+  <path class="skip" d="M578 357 L675 357"/>
+  <path class="skip" d="M578 497 L680 385"/>
+  <circle class="circle" cx="704" cy="357" r="31"/>
+  <text class="symbol green" x="696" y="366">+</text>
+  <text class="small green" x="650" y="440">elementwise sum</text>
+
+  <path class="line" d="M735 357 L796 357"/>
+  <rect class="out" x="802" y="301" width="194" height="112" rx="11"/>
+  <text class="mono ink" x="842" y="338">output head</text>
+  <text class="small muted" x="827" y="367">ReLU, 1 x 1, ReLU,</text>
+  <text class="small muted" x="866" y="390">1 x 1</text>
+
+  <path class="line" d="M996 357 L1050 357"/>
+  <rect class="out" x="1056" y="312" width="150" height="90" rx="11"/>
+  <text class="mono ink" x="1081" y="349">27 logits</text>
+  <text class="small muted" x="1077" y="377">next character</text>
+
+  <rect x="70" y="568" width="1136" height="52" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.6"/>
+  <text class="mono ink" x="94" y="600">combined_skip = s1 + s2 + s3  |  logits = output_head(combined_skip)</text>
+</svg>

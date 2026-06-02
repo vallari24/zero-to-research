@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 570" role="img" aria-labelledby="title desc">
+  <title id="title">How one pair summary is generated</title>
+  <desc id="desc">Character embeddings for a and b are concatenated, passed through a linear layer, BatchNorm, and tanh to create summary_ab.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.6; }
+      .input { fill: #eff6ff; stroke: #93c5fd; stroke-width: 1.6; }
+      .join { fill: #fff7ed; stroke: #fdba74; stroke-width: 1.6; }
+      .learn { fill: #f5f3ff; stroke: #c4b5fd; stroke-width: 1.6; }
+      .out { fill: #ecfdf5; stroke: #86efac; stroke-width: 1.6; }
+      .soft { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.4; }
+      .ink { fill: #111827; }
+      .muted { fill: #4b5563; }
+      .blue { fill: #1d4ed8; }
+      .orange { fill: #c2410c; }
+      .purple { fill: #6d28d9; }
+      .green { fill: #047857; }
+      .line { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .title { font: 800 27px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .text { font: 600 16px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 600 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .label { font: 800 18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1160" height="570" rx="20"/>
+  <text class="title ink" x="34" y="48">Close-up: how layer 1 creates summary_ab</text>
+  <text class="text muted" x="34" y="78">Only the Linear layer learns weights. Concatenate just rearranges numbers.</text>
+
+  <rect class="input" x="44" y="146" width="150" height="108" rx="10"/>
+  <text class="label blue" x="76" y="178">vector_a</text>
+  <text class="mono ink" x="76" y="207">[10]</text>
+  <text class="small muted" x="62" y="232">embedding for "a"</text>
+
+  <rect class="input" x="44" y="292" width="150" height="108" rx="10"/>
+  <text class="label blue" x="76" y="324">vector_b</text>
+  <text class="mono ink" x="76" y="353">[10]</text>
+  <text class="small muted" x="62" y="378">embedding for "b"</text>
+
+  <path class="line" d="M196 200 C240 200 246 232 284 250"/>
+  <path class="line" d="M196 346 C240 346 246 314 284 296"/>
+
+  <rect class="join" x="288" y="218" width="170" height="112" rx="10"/>
+  <text class="label orange" x="324" y="252">concat</text>
+  <text class="mono ink" x="346" y="281">[20]</text>
+  <text class="small muted" x="307" y="308">10 + 10 numbers</text>
+
+  <path class="line" d="M460 274 L536 274"/>
+  <rect class="learn" x="540" y="212" width="188" height="124" rx="10"/>
+  <text class="label purple" x="570" y="246">Linear W1</text>
+  <text class="mono ink" x="568" y="276">[20] @ [20, 200]</text>
+  <text class="mono ink" x="608" y="302">-&gt; [200]</text>
+  <text class="small muted" x="571" y="323">learned compression</text>
+
+  <path class="line" d="M730 274 L792 274"/>
+  <rect class="card" x="796" y="226" width="112" height="96" rx="10"/>
+  <text class="label ink" x="818" y="258">BN</text>
+  <text class="label ink" x="814" y="287">tanh</text>
+  <text class="small muted" x="809" y="309">stabilize</text>
+
+  <path class="line" d="M910 274 L968 274"/>
+  <rect class="out" x="972" y="218" width="154" height="112" rx="10"/>
+  <text class="label green" x="986" y="252">summary_ab</text>
+  <text class="mono ink" x="1024" y="281">[200]</text>
+  <text class="small muted" x="990" y="308">learned features</text>
+
+  <rect class="soft" x="44" y="458" width="1082" height="74" rx="10"/>
+  <text class="mono ink" x="68" y="486">Toy version with 2-number embeddings:</text>
+  <text class="mono muted" x="68" y="512">a = [0.2, 0.7], b = [0.4, 0.1]  -&gt;  concat = [0.2, 0.7, 0.4, 0.1]  -&gt;  learned summary</text>
+</svg>

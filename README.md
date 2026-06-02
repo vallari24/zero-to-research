@@ -21,12 +21,14 @@ judgment, and technical writing.
 - `notebooks/01_scalar_autodiff_engine.ipynb`: scalar autodiff engine build log
 - `notebooks/02_makemore_bigrams.ipynb`: lecture 2 bigram build + count-vs-neural data-regime experiment
 - `notebooks/05_makemore_backprop_ninja_exercises.ipynb`: manual Makemore backprop exercises with line-by-line derivations
+- `notebooks/06_makemore_wavenet_rnn_lstm_comparison.ipynb`: WaveNet residual/skip, RNN, and LSTM loss comparison on Makemore names
 - `src/`: helper code factored out of notebooks
 - `data/`: local datasets and generated artifacts
 - `docs/02_makemore_bigrams_notes.md`: lecture 2 short bigram note
 - `docs/04_makemore_mlp_notes.md`: part 2 note on why count tables do not scale to longer context
 - `docs/06_makemore_activations_gradients_batchnorm_notes.md`: part 3 activation, gradient, and BatchNorm diagnostics
 - `docs/07_makemore_backprop_ninja_notes.md`: part 4 manual backprop rule-card companion
+- `docs/08_makemore_wavenet_hierarchy_notes.md`: part 5 concept-first guide to hierarchical summaries and WaveNet intuition
 - `docs/03_pytorch_basics.md`: short PyTorch basics note
 - `docs/rl_additional_resources.md`: filtered RL watch order for RLHF and LLM tuning
 - `docs/state-rl.md`: shortlist of promising RL, world-model, and planning project ideas

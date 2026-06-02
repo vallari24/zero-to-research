@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 360" role="img" aria-labelledby="title desc">
+  <title id="title">Layer 2 summarizes two four-character groups</title>
+  <desc id="desc">Four pair summaries are joined into two learned summaries, each representing four characters.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .input { fill: #ecfdf5; stroke: #86efac; stroke-width: 1.5; }
+      .out { fill: #fff7ed; stroke: #fdba74; stroke-width: 1.5; }
+      .ink { fill: #111827; }
+      .muted { fill: #4b5563; }
+      .green { fill: #047857; }
+      .orange { fill: #c2410c; }
+      .line { stroke: #94a3b8; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .title { font: 800 25px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .text { font: 600 15px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 600 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1120" height="360" rx="20"/>
+  <text class="title ink" x="32" y="46">Layer 2: turn four pair summaries into two broader summaries</text>
+  <text class="text muted" x="32" y="74">Each output now carries information from four original characters.</text>
+
+  <rect class="input" x="98" y="114" width="160" height="60" rx="10"/>
+  <rect class="input" x="326" y="114" width="160" height="60" rx="10"/>
+  <rect class="input" x="634" y="114" width="160" height="60" rx="10"/>
+  <rect class="input" x="862" y="114" width="160" height="60" rx="10"/>
+  <text class="mono green" x="122" y="150">summary_ab</text>
+  <text class="mono green" x="350" y="150">summary_cd</text>
+  <text class="mono green" x="658" y="150">summary_ef</text>
+  <text class="mono green" x="886" y="150">summary_gh</text>
+
+  <path class="line" d="M178 176 L292 234"/>
+  <path class="line" d="M406 176 L292 234"/>
+  <path class="line" d="M714 176 L828 234"/>
+  <path class="line" d="M942 176 L828 234"/>
+
+  <rect class="out" x="194" y="238" width="196" height="66" rx="10"/>
+  <rect class="out" x="730" y="238" width="196" height="66" rx="10"/>
+  <text class="mono orange" x="225" y="266">summary_abcd</text>
+  <text class="mono orange" x="761" y="266">summary_efgh</text>
+  <text class="small muted" x="252" y="288">200 features</text>
+  <text class="small muted" x="788" y="288">200 features</text>
+
+  <text class="mono ink" x="32" y="338">W2 is shared for both groups. W2 is a new layer with its own learned weights.</text>
+</svg>

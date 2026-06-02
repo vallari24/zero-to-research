@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 340" role="img" aria-labelledby="title desc">
+  <title id="title">Causal means past values can influence a prediction but future values cannot</title>
+  <desc id="desc">A next-character prediction for i can read previous characters a through h but cannot read the future answer i.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .past { fill: #eff6ff; stroke: #93c5fd; stroke-width: 1.5; }
+      .future { fill: #fef2f2; stroke: #fca5a5; stroke-width: 1.5; stroke-dasharray: 5 5; }
+      .out { fill: #ecfdf5; stroke: #86efac; stroke-width: 1.5; }
+      .ink { fill: #111827; }
+      .muted { fill: #4b5563; }
+      .blue { fill: #1d4ed8; }
+      .green { fill: #047857; }
+      .red { fill: #b91c1c; }
+      .line { stroke: #94a3b8; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .block { stroke: #ef4444; stroke-width: 2.5; stroke-dasharray: 6 5; fill: none; }
+      .title { font: 800 25px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .text { font: 600 15px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 600 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1120" height="340" rx="20"/>
+  <text class="title ink" x="32" y="46">Causal: predict the next character using the past only</text>
+  <text class="text muted" x="32" y="74">The model must not read the answer it is trying to predict.</text>
+
+  <g>
+    <rect class="past" x="58" y="136" width="64" height="54" rx="9"/>
+    <rect class="past" x="138" y="136" width="64" height="54" rx="9"/>
+    <rect class="past" x="218" y="136" width="64" height="54" rx="9"/>
+    <rect class="past" x="298" y="136" width="64" height="54" rx="9"/>
+    <rect class="past" x="378" y="136" width="64" height="54" rx="9"/>
+    <rect class="past" x="458" y="136" width="64" height="54" rx="9"/>
+    <rect class="past" x="538" y="136" width="64" height="54" rx="9"/>
+    <rect class="past" x="618" y="136" width="64" height="54" rx="9"/>
+    <text class="mono blue" x="84" y="169">a</text>
+    <text class="mono blue" x="164" y="169">b</text>
+    <text class="mono blue" x="244" y="169">c</text>
+    <text class="mono blue" x="324" y="169">d</text>
+    <text class="mono blue" x="404" y="169">e</text>
+    <text class="mono blue" x="484" y="169">f</text>
+    <text class="mono blue" x="564" y="169">g</text>
+    <text class="mono blue" x="644" y="169">h</text>
+  </g>
+
+  <path class="line" d="M684 163 L774 163"/>
+  <rect class="out" x="780" y="128" width="154" height="70" rx="10"/>
+  <text class="mono green" x="807" y="158">predict i</text>
+  <text class="small muted" x="805" y="180">from a..h only</text>
+
+  <rect class="future" x="1000" y="136" width="64" height="54" rx="9"/>
+  <text class="mono red" x="1026" y="169">i</text>
+  <path class="block" d="M1000 163 L938 163"/>
+  <text class="small red" x="965" y="118">blocked future answer</text>
+
+  <text class="mono ink" x="32" y="272">causal = information can move from left to right, never backward from the future</text>
+</svg>
