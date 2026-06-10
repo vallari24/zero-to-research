@@ -29,6 +29,7 @@ judgment, and technical writing.
 - `docs/06_makemore_activations_gradients_batchnorm_notes.md`: part 3 activation, gradient, and BatchNorm diagnostics
 - `docs/07_makemore_backprop_ninja_notes.md`: part 4 manual backprop rule-card companion
 - `docs/08_makemore_wavenet_hierarchy_notes.md`: part 5 concept-first guide to hierarchical summaries and WaveNet intuition
+- `docs/09_makemore_rnn_lstm_notes.md`: part 6 scratch RNN and LSTM guide with tiny character batches
 - `docs/03_pytorch_basics.md`: short PyTorch basics note
 - `docs/rl_additional_resources.md`: filtered RL watch order for RLHF and LLM tuning
 - `docs/state-rl.md`: shortlist of promising RL, world-model, and planning project ideas

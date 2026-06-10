@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 1080 430" role="img" aria-labelledby="title desc">
+  <title id="title">Four character-level training examples</title>
+  <desc id="desc">A batch of four fixed-length character contexts and their next-character targets.</desc>
+  <rect width="1080" height="430" fill="#ffffff"/>
+  <style>
+    .title { font: 700 24px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+    .label { font: 700 16px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #374151; }
+    .mono { font: 600 22px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #0f172a; }
+    .small { font: 500 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #4b5563; }
+    .box { fill: #eff6ff; stroke: #60a5fa; stroke-width: 2; rx: 14; }
+    .target { fill: #fff7ed; stroke: #fb923c; stroke-width: 2; rx: 14; }
+    .arrow { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="44" class="title">One mini-batch: 4 contexts, 4 targets</text>
+  <text x="40" y="76" class="small">Each row is one training example. The model reads the context and predicts the next character.</text>
+
+  <text x="86" y="124" class="label">context X</text>
+  <text x="688" y="124" class="label">target Y</text>
+  <text x="822" y="124" class="label">meaning</text>
+
+  <g transform="translate(40,145)">
+    <rect class="box" x="0" y="0" width="520" height="48"/>
+    <text class="mono" x="34" y="32">[ .  .  . ]</text>
+    <path class="arrow" d="M 582 24 H 650"/>
+    <rect class="target" x="675" y="0" width="90" height="48"/>
+    <text class="mono" x="708" y="32">a</text>
+    <text class="small" x="800" y="20">empty context</text>
+    <text class="small" x="800" y="39">predict first char</text>
+  </g>
+
+  <g transform="translate(40,205)">
+    <rect class="box" x="0" y="0" width="520" height="48"/>
+    <text class="mono" x="34" y="32">[ .  .  a ]</text>
+    <path class="arrow" d="M 582 24 H 650"/>
+    <rect class="target" x="675" y="0" width="90" height="48"/>
+    <text class="mono" x="708" y="32">b</text>
+    <text class="small" x="800" y="20">after seeing a</text>
+    <text class="small" x="800" y="39">predict b</text>
+  </g>
+
+  <g transform="translate(40,265)">
+    <rect class="box" x="0" y="0" width="520" height="48"/>
+    <text class="mono" x="34" y="32">[ .  a  b ]</text>
+    <path class="arrow" d="M 582 24 H 650"/>
+    <rect class="target" x="675" y="0" width="90" height="48"/>
+    <text class="mono" x="708" y="32">c</text>
+    <text class="small" x="800" y="20">after seeing ab</text>
+    <text class="small" x="800" y="39">predict c</text>
+  </g>
+
+  <g transform="translate(40,325)">
+    <rect class="box" x="0" y="0" width="520" height="48"/>
+    <text class="mono" x="34" y="32">[ a  b  c ]</text>
+    <path class="arrow" d="M 582 24 H 650"/>
+    <rect class="target" x="675" y="0" width="90" height="48"/>
+    <text class="mono" x="708" y="32">d</text>
+    <text class="small" x="800" y="20">after seeing abc</text>
+    <text class="small" x="800" y="39">predict d</text>
+  </g>
+</svg>

@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 1100 440" role="img" aria-labelledby="title desc">
+  <title id="title">RNN unrolled over three time steps</title>
+  <desc id="desc">The same recurrent cell is reused at each time step, passing hidden state forward.</desc>
+  <rect width="1100" height="440" fill="#ffffff"/>
+  <style>
+    .title { font: 700 24px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+    .label { font: 700 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #374151; }
+    .small { font: 500 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #4b5563; }
+    .mono { font: 600 17px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #0f172a; }
+    .cell { fill: #eef2ff; stroke: #818cf8; stroke-width: 2; rx: 16; }
+    .inner { fill: #ffffff; stroke: #a5b4fc; stroke-width: 1.6; rx: 10; }
+    .act { fill: #fff7ed; stroke: #fb923c; stroke-width: 2; }
+    .input { fill: #ecfdf5; stroke: #34d399; stroke-width: 2; rx: 13; }
+    .state { fill: #fff7ed; stroke: #fb923c; stroke-width: 2; rx: 13; }
+    .out { fill: #fef2f2; stroke: #f87171; stroke-width: 2; rx: 13; }
+    .arrow { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+    .dash { stroke: #94a3b8; stroke-width: 1.8; fill: none; stroke-dasharray: 8 7; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="48" class="title">RNN = same cell reused over time</text>
+  <text x="40" y="80" class="small">A hidden state moves left to right. The weights are shared at every time step.</text>
+
+  <path class="dash" d="M 92 118 H 812"/>
+  <text class="small" x="356" y="114">one set of parameters, drawn three times for explanation</text>
+
+  <rect class="state" x="40" y="196" width="100" height="44"/>
+  <text class="mono" x="64" y="224">h_-1</text>
+  <path class="arrow" d="M 140 218 H 190"/>
+
+  <g transform="translate(190,165)">
+    <rect class="cell" x="0" y="0" width="150" height="76"/>
+    <rect class="inner" x="14" y="18" width="64" height="32"/>
+    <text class="small" x="25" y="39">Linear</text>
+    <path class="arrow" d="M 78 34 H 95"/>
+    <circle class="act" cx="117" cy="34" r="22"/>
+    <text class="small" x="102" y="39">tanh</text>
+    <text class="small" x="42" y="66">shared W,b</text>
+    <rect class="input" x="15" y="132" width="120" height="52"/>
+    <text class="mono" x="43" y="165">x_0</text>
+    <path class="arrow" d="M 75 132 V 84"/>
+  </g>
+
+  <path class="arrow" d="M 340 203 H 430"/>
+  <text class="mono" x="372" y="190">h_0</text>
+
+  <g transform="translate(430,165)">
+    <rect class="cell" x="0" y="0" width="150" height="76"/>
+    <rect class="inner" x="14" y="18" width="64" height="32"/>
+    <text class="small" x="25" y="39">Linear</text>
+    <path class="arrow" d="M 78 34 H 95"/>
+    <circle class="act" cx="117" cy="34" r="22"/>
+    <text class="small" x="102" y="39">tanh</text>
+    <text class="small" x="42" y="66">shared W,b</text>
+    <rect class="input" x="15" y="132" width="120" height="52"/>
+    <text class="mono" x="43" y="165">x_1</text>
+    <path class="arrow" d="M 75 132 V 84"/>
+  </g>
+
+  <path class="arrow" d="M 580 203 H 670"/>
+  <text class="mono" x="612" y="190">h_1</text>
+
+  <g transform="translate(670,165)">
+    <rect class="cell" x="0" y="0" width="150" height="76"/>
+    <rect class="inner" x="14" y="18" width="64" height="32"/>
+    <text class="small" x="25" y="39">Linear</text>
+    <path class="arrow" d="M 78 34 H 95"/>
+    <circle class="act" cx="117" cy="34" r="22"/>
+    <text class="small" x="102" y="39">tanh</text>
+    <text class="small" x="42" y="66">shared W,b</text>
+    <rect class="input" x="15" y="132" width="120" height="52"/>
+    <text class="mono" x="43" y="165">x_2</text>
+    <path class="arrow" d="M 75 132 V 84"/>
+  </g>
+
+  <path class="arrow" d="M 820 203 H 920"/>
+  <text class="mono" x="854" y="190">h_2</text>
+  <rect class="out" x="920" y="176" width="120" height="56"/>
+  <text class="mono" x="946" y="211">logits</text>
+  <text class="small" x="884" y="266">final hidden state</text>
+  <text class="small" x="884" y="284">predicts next char</text>
+</svg>

@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="430" viewBox="0 0 1080 516" role="img" aria-labelledby="title desc">
+  <title id="title">LSTM cell concept diagram</title>
+  <desc id="desc">The LSTM keeps old memory, writes new candidate memory, and exposes part of memory as hidden state.</desc>
+  <rect width="1080" height="516" fill="#ffffff"/>
+  <style>
+    .title { font: 700 24px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+    .label { font: 700 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #374151; }
+    .small { font: 500 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #4b5563; }
+    .mono { font: 600 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #0f172a; }
+    .gate { fill: #eef2ff; stroke: #818cf8; stroke-width: 2; rx: 13; }
+    .mem { fill: #fff7ed; stroke: #fb923c; stroke-width: 2; rx: 13; }
+    .input { fill: #ecfdf5; stroke: #34d399; stroke-width: 2; rx: 13; }
+    .op { fill: #f8fafc; stroke: #94a3b8; stroke-width: 2; rx: 16; }
+    .arrow { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="46" class="title">LSTM cell = memory plus small controls</text>
+  <text x="40" y="78" class="small">At each character, the cell chooses what old memory to keep, what new content to write, and what to reveal.</text>
+
+  <rect class="input" x="45" y="150" width="135" height="50"/>
+  <text class="mono" x="82" y="181">x_t</text>
+  <text class="small" x="57" y="220">current character</text>
+
+  <rect class="input" x="45" y="260" width="135" height="50"/>
+  <text class="mono" x="68" y="291">h_prev</text>
+  <text class="small" x="67" y="330">previous visible state</text>
+
+  <path class="arrow" d="M 180 175 H 250"/>
+  <path class="arrow" d="M 180 285 H 250"/>
+
+  <rect class="gate" x="250" y="160" width="200" height="135"/>
+  <text class="label" x="292" y="194">one Linear layer</text>
+  <text class="small" x="285" y="224">looks at x_t and h_prev</text>
+  <text class="small" x="282" y="250">and creates controls</text>
+  <text class="small" x="298" y="276">plus candidate content</text>
+
+  <path class="arrow" d="M 450 180 H 520"/>
+  <path class="arrow" d="M 450 235 H 520"/>
+  <path class="arrow" d="M 450 290 H 520"/>
+  <path class="arrow" d="M 450 345 H 520"/>
+
+  <rect class="gate" x="520" y="155" width="180" height="44"/>
+  <text class="small" x="546" y="183">forget gate: keep old?</text>
+
+  <rect class="gate" x="520" y="210" width="180" height="44"/>
+  <text class="small" x="551" y="238">write gate: write new?</text>
+
+  <rect class="gate" x="520" y="265" width="180" height="44"/>
+  <text class="small" x="535" y="293">candidate: proposed content</text>
+
+  <rect class="gate" x="520" y="320" width="180" height="44"/>
+  <text class="small" x="550" y="348">output gate: reveal?</text>
+
+  <rect class="mem" x="770" y="120" width="150" height="50"/>
+  <text class="mono" x="800" y="151">old memory</text>
+  <path class="arrow" d="M 845 170 V 220"/>
+  <path class="arrow" d="M 700 177 C 730 178 745 196 765 220"/>
+
+  <rect class="op" x="750" y="220" width="190" height="58"/>
+  <text class="small" x="793" y="244">keep selected old</text>
+  <text class="small" x="803" y="264">memory features</text>
+
+  <path class="arrow" d="M 700 232 C 725 235 730 304 760 318"/>
+  <path class="arrow" d="M 700 287 H 750"/>
+  <rect class="op" x="750" y="305" width="190" height="58"/>
+  <text class="small" x="789" y="329">write selected new</text>
+  <text class="small" x="806" y="349">content features</text>
+
+  <path class="arrow" d="M 940 249 H 980 V 334 H 950"/>
+  <path class="arrow" d="M 940 334 H 980"/>
+  <rect class="mem" x="980" y="300" width="80" height="68"/>
+  <text class="mono" x="998" y="328">new</text>
+  <text class="mono" x="988" y="350">memory</text>
+
+  <path class="arrow" d="M 1020 368 V 424 H 935"/>
+  <path class="arrow" d="M 700 342 C 740 395 825 432 895 434"/>
+  <rect class="op" x="760" y="410" width="170" height="58"/>
+  <text class="small" x="795" y="434">reveal selected</text>
+  <text class="small" x="817" y="454">memory</text>
+  <path class="arrow" d="M 930 439 H 1018"/>
+  <text class="mono" x="980" y="426">h_t</text>
+</svg>

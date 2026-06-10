@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="610" viewBox="0 0 1240 760" role="img" aria-labelledby="title desc">
+  <title id="title">Architecture comparison for character prediction</title>
+  <desc id="desc">Linear, MLP, convolution, RNN, and LSTM process the same character context in different ways before producing logits and loss.</desc>
+  <rect width="1240" height="760" fill="#ffffff"/>
+  <style>
+    .title { font: 700 24px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+    .subtitle { font: 500 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #4b5563; }
+    .rowTitle { font: 700 17px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+    .small { font: 500 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #4b5563; }
+    .tiny { font: 500 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #64748b; }
+    .mono { font: 600 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #0f172a; }
+    .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; rx: 18; }
+    .input { fill: #ecfdf5; stroke: #34d399; stroke-width: 1.8; rx: 12; }
+    .linear { fill: #fefce8; stroke: #eab308; stroke-width: 1.8; rx: 12; }
+    .mlp { fill: #eef2ff; stroke: #818cf8; stroke-width: 1.8; rx: 12; }
+    .conv { fill: #f0fdfa; stroke: #14b8a6; stroke-width: 1.8; rx: 12; }
+    .rnn { fill: #eff6ff; stroke: #60a5fa; stroke-width: 1.8; rx: 12; }
+    .lstm { fill: #fff7ed; stroke: #fb923c; stroke-width: 1.8; rx: 12; }
+    .act { fill: #fff7ed; stroke: #fb923c; stroke-width: 1.8; }
+    .gateAct { fill: #eef2ff; stroke: #818cf8; stroke-width: 1.8; }
+    .out { fill: #fef2f2; stroke: #f87171; stroke-width: 1.8; rx: 12; }
+    .loss { fill: #fdf2f8; stroke: #f472b6; stroke-width: 1.8; rx: 12; }
+    .arrow { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .back { stroke: #dc2626; stroke-width: 1.8; fill: none; marker-end: url(#redarrow); stroke-dasharray: 7 6; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 z" fill="#64748b"/>
+    </marker>
+    <marker id="redarrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 z" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="42" class="title">Same task, different ways to process context</text>
+  <text x="40" y="70" class="subtitle">Example task: read previous characters and produce next-character logits. Backward pass follows the same path in reverse.</text>
+
+  <rect class="panel" x="35" y="92" width="1190" height="110"/>
+  <text x="60" y="124" class="rowTitle">Linear</text>
+  <text x="60" y="146" class="tiny">one transform</text>
+  <rect class="input" x="220" y="122" width="110" height="44"/>
+  <text x="246" y="150" class="mono">x_c</text>
+  <text x="216" y="184" class="tiny">current/last char vector</text>
+  <path class="arrow" d="M 330 144 H 390"/>
+  <rect class="linear" x="390" y="122" width="150" height="44"/>
+  <text x="421" y="150" class="small">Linear W,b</text>
+  <path class="arrow" d="M 540 144 H 680"/>
+  <rect class="out" x="680" y="122" width="110" height="44"/>
+  <text x="715" y="150" class="mono">logits</text>
+  <path class="arrow" d="M 790 144 H 850"/>
+  <rect class="loss" x="850" y="122" width="95" height="44"/>
+  <text x="878" y="150" class="small">loss</text>
+  <text x="970" y="130" class="tiny">logits = Linear(x_c)</text>
+  <text x="970" y="148" class="tiny">no hidden tanh</text>
+  <text x="970" y="166" class="tiny">in this baseline</text>
+  <path class="back" d="M 850 178 C 700 206 520 206 390 178"/>
+
+  <rect class="panel" x="35" y="218" width="1190" height="110"/>
+  <text x="60" y="250" class="rowTitle">Flat MLP</text>
+  <text x="60" y="272" class="tiny">flatten context</text>
+  <rect class="input" x="220" y="248" width="150" height="44"/>
+  <text x="248" y="276" class="mono">[a b c]</text>
+  <text x="216" y="310" class="tiny">all positions at once</text>
+  <path class="arrow" d="M 370 270 H 430"/>
+  <rect class="mlp" x="430" y="248" width="110" height="44"/>
+  <text x="463" y="276" class="small">flatten</text>
+  <path class="arrow" d="M 540 270 H 590"/>
+  <rect class="linear" x="590" y="248" width="100" height="44"/>
+  <text x="616" y="276" class="mono">z</text>
+  <path class="arrow" d="M 690 270 H 724"/>
+  <circle class="act" cx="746" cy="270" r="22"/>
+  <text x="731" y="275" class="tiny">tanh</text>
+  <path class="arrow" d="M 768 270 H 798"/>
+  <rect class="mlp" x="798" y="248" width="72" height="44"/>
+  <text x="828" y="276" class="mono">h</text>
+  <path class="arrow" d="M 870 270 H 910"/>
+  <rect class="out" x="910" y="248" width="105" height="44"/>
+  <text x="940" y="276" class="mono">logits</text>
+  <text x="1045" y="252" class="tiny">z = Linear(flat)</text>
+  <text x="1045" y="270" class="tiny">h = tanh(z)</text>
+  <text x="1045" y="288" class="tiny">then logits</text>
+  <path class="back" d="M 910 304 C 700 332 520 332 430 304"/>
+
+  <rect class="panel" x="35" y="344" width="1190" height="110"/>
+  <text x="60" y="376" class="rowTitle">WaveNet Conv</text>
+  <text x="60" y="398" class="tiny">shared sliding rule</text>
+  <rect class="input" x="220" y="374" width="150" height="44"/>
+  <text x="248" y="402" class="mono">[a b c]</text>
+  <path class="arrow" d="M 370 396 H 430"/>
+  <text x="430" y="350" class="tiny">same W slides over local windows</text>
+  <rect class="conv" x="430" y="356" width="100" height="36"/>
+  <text x="463" y="379" class="small">ab</text>
+  <rect class="conv" x="430" y="400" width="100" height="36"/>
+  <text x="463" y="423" class="small">bc</text>
+  <path class="arrow" d="M 530 396 H 570"/>
+  <rect class="linear" x="570" y="374" width="110" height="44"/>
+  <text x="601" y="402" class="mono">z_ab</text>
+  <path class="arrow" d="M 680 396 H 714"/>
+  <circle class="act" cx="736" cy="396" r="22"/>
+  <text x="721" y="401" class="tiny">tanh</text>
+  <path class="arrow" d="M 758 396 H 790"/>
+  <rect class="conv" x="790" y="374" width="96" height="44"/>
+  <text x="815" y="402" class="mono">h_ab</text>
+  <path class="arrow" d="M 886 396 H 930"/>
+  <rect class="conv" x="930" y="374" width="120" height="44"/>
+  <text x="956" y="402" class="small">stack h's</text>
+  <path class="arrow" d="M 1050 396 H 1088"/>
+  <rect class="out" x="1088" y="374" width="105" height="44"/>
+  <text x="1118" y="402" class="mono">logits</text>
+  <path class="back" d="M 1088 430 C 820 458 560 458 430 430"/>
+
+  <rect class="panel" x="35" y="470" width="1190" height="110"/>
+  <text x="60" y="502" class="rowTitle">RNN</text>
+  <text x="60" y="524" class="tiny">one memory state</text>
+  <rect class="input" x="220" y="500" width="54" height="40"/>
+  <text x="241" y="526" class="mono">a</text>
+  <path class="arrow" d="M 274 520 H 320"/>
+  <rect class="rnn" x="320" y="500" width="72" height="40"/>
+  <text x="342" y="526" class="mono">h0</text>
+  <path class="arrow" d="M 392 520 H 438"/>
+  <rect class="input" x="438" y="500" width="54" height="40"/>
+  <text x="459" y="526" class="mono">b</text>
+  <path class="arrow" d="M 492 520 H 540"/>
+  <rect class="rnn" x="540" y="500" width="72" height="40"/>
+  <text x="562" y="526" class="mono">h1</text>
+  <path class="arrow" d="M 612 520 H 658"/>
+  <rect class="input" x="658" y="500" width="54" height="40"/>
+  <text x="679" y="526" class="mono">c</text>
+  <path class="arrow" d="M 712 520 H 760"/>
+  <rect class="rnn" x="760" y="500" width="72" height="40"/>
+  <text x="782" y="526" class="mono">h2</text>
+  <path class="arrow" d="M 832 520 H 930"/>
+  <rect class="out" x="930" y="500" width="95" height="40"/>
+  <text x="953" y="526" class="mono">logits</text>
+  <text x="1065" y="512" class="tiny">each h is a</text>
+  <text x="1065" y="530" class="tiny">hidden vector</text>
+  <path class="back" d="M 930 550 C 720 578 510 578 320 550"/>
+
+  <rect class="panel" x="35" y="596" width="1190" height="110"/>
+  <text x="60" y="628" class="rowTitle">LSTM</text>
+  <text x="60" y="650" class="tiny">memory plus gates</text>
+  <rect class="input" x="220" y="626" width="54" height="40"/>
+  <text x="241" y="652" class="mono">a</text>
+  <path class="arrow" d="M 274 646 H 320"/>
+  <rect class="lstm" x="320" y="616" width="100" height="60"/>
+  <text x="342" y="641" class="mono">h,c</text>
+  <text x="344" y="660" class="tiny">gates</text>
+  <path class="arrow" d="M 420 646 H 465"/>
+  <rect class="input" x="465" y="626" width="54" height="40"/>
+  <text x="486" y="652" class="mono">b</text>
+  <path class="arrow" d="M 519 646 H 565"/>
+  <rect class="lstm" x="565" y="616" width="100" height="60"/>
+  <text x="587" y="641" class="mono">h,c</text>
+  <text x="589" y="660" class="tiny">gates</text>
+  <path class="arrow" d="M 665 646 H 710"/>
+  <rect class="input" x="710" y="626" width="54" height="40"/>
+  <text x="731" y="652" class="mono">c</text>
+  <path class="arrow" d="M 764 646 H 810"/>
+  <rect class="lstm" x="810" y="616" width="100" height="60"/>
+  <text x="832" y="641" class="mono">h,c</text>
+  <text x="834" y="660" class="tiny">gates</text>
+  <path class="arrow" d="M 910 646 H 950"/>
+  <rect class="out" x="950" y="626" width="90" height="40"/>
+  <text x="970" y="652" class="mono">logits</text>
+  <text x="1065" y="638" class="tiny">c is protected</text>
+  <text x="1065" y="656" class="tiny">memory; h is visible</text>
+  <text x="1065" y="684" class="tiny">keeps, writes,</text>
+  <text x="1065" y="702" class="tiny">reveals memory</text>
+  <path class="back" d="M 950 690 C 750 724 550 724 320 690"/>
+
+  <text x="40" y="735" class="tiny">Training view: logits become loss; backward pass follows each row's arrows in reverse; updates change the learned weights/gates.</text>
+</svg>
