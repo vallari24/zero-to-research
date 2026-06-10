@@ -4,9 +4,5 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
-data/*
-!data/.gitkeep
-!data/names.txt
-
 outputs/
 artifacts/
