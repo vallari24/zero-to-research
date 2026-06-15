@@ -54,6 +54,24 @@ Memory hook:
 given previous tokens, predict the next token
 ```
 
+---
+
+### 🧭 How To Read This Post
+
+Color marks the *kind* of idea, so you can skim by hue:
+
+| Color | Means |
+|:---:|:---|
+| <span style="color:#ffff99"><strong>● yellow</strong></span> | a <strong>new term</strong> being defined |
+| <span style="color:#8aff8a"><strong>● green</strong></span> | the <strong>key idea</strong> / the punchline |
+| <span style="color:#93c5fd"><strong>● blue</strong></span> | a <strong>tradeoff</strong> or subtle nuance |
+| <span style="color:#ff8a8a"><strong>● red</strong></span> | a <strong>hard rule</strong> / "never do this" |
+
+Boxed `text` panels trace tensor **shapes** and **data flow** step by step; the
+**Memory hook** at the end of each section is the one-glance recap.
+
+---
+
 ## Tokenization
 
 We give the model a text file, show it many examples of "what comes next?", and
@@ -215,14 +233,14 @@ sequence length</strong></span>.
 
 The codebook is the list of possible tokens. It is also called the vocabulary.
 
-```text
-small codebook:
-few possible tokens
-very long sequence of integers
+| | Codebook (vocab) | Sequence length | `"hello world"` becomes |
+|:---|:---|:---|:---|
+| **Character-level** (ours) | tiny — ~83 chars | very long | **11** tokens |
+| **Subword** (GPT-2 / tiktoken) | large — ~50k pieces | short | **2** tokens |
 
-large codebook:
-many possible tokens
-shorter sequence of integers
+```text
+small codebook  ─►  few possible tokens   ─►  very LONG sequence of integers
+large codebook  ─►  many possible tokens  ─►  SHORTER sequence of integers
 ```
 
 Our first tokenizer has a very small codebook: just the unique characters in the
@@ -386,18 +404,13 @@ Perplexity is another way to read the same signal. Intuitively:
 perplexity ~= how many likely next-token choices the model feels confused among
 ```
 
-Lower perplexity is better.
+Lower perplexity is better. Read it as *"how many choices is the model torn between?"*
 
-```text
-perplexity 100:
-the model is very unsure
-
-perplexity 10:
-the model has narrowed the next token down much more
-
-perplexity 2:
-the model is very confident among a small number of likely choices
-```
+| Perplexity | What it feels like |
+|:---:|:---|
+| **100** | 😵 very unsure — flailing among ~100 options |
+| **10** | 🤔 narrowed down a lot |
+| **2** | 🎯 confident — torn between just a couple of likely choices |
 
 Loss and perplexity are useful because they match the actual pretraining task:
 
@@ -413,31 +426,12 @@ pretraining</strong></span>.
 
 Imagine a model that marks emails as spam.
 
-Precision asks:
+| | The question it asks | High score means | The instinct |
+|:---|:---|:---|:---|
+| **Precision** | When it says "spam", how often is it right? | few false alarms | be careful before saying *yes* |
+| **Recall** | Of all real spam, how much did it catch? | misses very little | try hard to catch every *yes* |
 
-```text
-When the model says "spam", how often is it right?
-```
-
-High precision means few false alarms.
-
-Recall asks:
-
-```text
-Of all the real spam emails, how many did the model catch?
-```
-
-High recall means it misses very little spam.
-
-The tradeoff:
-
-```text
-high precision:
-be careful before saying yes
-
-high recall:
-try hard to catch every yes
-```
+The two pull against each other — chase one and the other tends to slip.
 
 Validation data is where these kinds of numbers matter. We want to measure the
 model on examples it did not train on, because that is closer to how it will
@@ -2566,7 +2560,7 @@ difference is *which direction you normalize over*:
 ```
 
 LayerNorm normalizes **each token's feature vector independently** — no dependence on the
-other examples in the batch. Karpathy's micrograd-style implementation is literally
+other examples in the batch. The minimal implementation is literally
 BatchNorm with the reduction axis flipped from `0` (batch) to `1` (features):
 
 ```python
@@ -2880,18 +2874,27 @@ n_layer = 4          # number of Blocks stacked
 dropout = 0.0        # fraction of activations randomly zeroed
 ```
 
-It helps to split these into **two families**. Some shape the *model* (its size and
-capacity); some shape the *training* (how it learns). A useful mental picture:
+It helps to split these into **three families** — one shapes the *model*, one shapes the
+*training*, one is just measurement. Here's the whole panel at a glance:
+
+| Knob | Value | Family | What it controls |
+|:---|:---:|:---|:---|
+| `n_embd` | 64 | 🏗️ Architecture | model **width** — info carried per token |
+| `n_head` | 4 | 🏗️ Architecture | parallel attention patterns per block |
+| `n_layer` | 4 | 🏗️ Architecture | **depth** — rounds of communicate + compute |
+| `block_size` | 32 | 🏗️ Architecture | context length `T` (attention span) |
+| `dropout` | 0.0 | 🏗️ Architecture | regularization strength |
+| `learning_rate` | 1e-3 | ⚙️ Optimization | **step size** (the one to get right) |
+| `batch_size` | 16 | ⚙️ Optimization | sequences per step → gradient smoothness |
+| `max_iters` | 5000 | ⚙️ Optimization | how long to train |
+| `eval_interval` | 100 | 📋 Bookkeeping | how often to measure loss |
+| `eval_iters` | 200 | 📋 Bookkeeping | batches averaged per measurement |
+| `device` | cuda/cpu | 📋 Bookkeeping | hardware |
 
 ```text
-   ARCHITECTURE knobs  →  decide the model's SHAPE & CAPACITY  (set once, baked in)
-        n_embd, n_head, n_layer, block_size, dropout
-
-   OPTIMIZATION knobs  →  decide HOW it LEARNS                 (only affect training)
-        learning_rate, batch_size, max_iters
-
-   BOOKKEEPING knobs   →  just for measuring / hardware        (no effect on the model)
-        eval_interval, eval_iters, device
+   🏗️ ARCHITECTURE  →  the model's SHAPE & CAPACITY   (baked into the trained model)
+   ⚙️ OPTIMIZATION   →  HOW it LEARNS                  (affects training, not the shape)
+   📋 BOOKKEEPING    →  measuring & hardware           (no effect on the model at all)
 ```
 
 ### The architecture knobs (model capacity)
