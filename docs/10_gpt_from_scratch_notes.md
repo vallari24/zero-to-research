@@ -1421,3 +1421,961 @@ tril         = the "only see the past" rule, written as a matrix
 wei          = affinities: HOW MUCH of each past token fuses into position t
 the punchline= let wei be LEARNED from the data -> that is self-attention
 ```
+
+---
+
+## Self-Attention: Letting Tokens Decide Who To Listen To
+
+Everything so far used `wei = torch.zeros((T, T))` — a **flat average**. Every past
+token counts exactly the same:
+
+```text
+   wei (the flat average)              what it means
+
+  [1.00  0     0    ...]               token 4 listens to tokens 1,2,3,4
+  [0.25  0.25  0.25  0.25 ...]         ...with EQUAL weight to each
+        ^^^^^^^^^^^^^^^^^^
+        uniform -- boring -- token 4 has no opinion about WHO matters
+```
+
+But that is not how language works. Different tokens care about different things:
+
+```text
+   a vowel scanning the past for a consonant:
+
+   "...   t   h   e        c   a [t]"            <- I am 'a', a vowel
+                                  ^
+          I don't care equally about every past token.
+          I'm specifically HUNTING for consonants near me.
+
+          I want to pull in a LOT from 'c' and 't', a little from 'the'.
+```
+
+We want each token to gather from the past in a
+<span style="color:#8aff8a"><strong>data-dependent</strong></span> way — weights that
+*depend on the actual tokens*, not a fixed flat average. **Self-attention** is the
+mechanism that makes this happen.
+
+### The Big Idea: Query and Key
+
+Every token emits **two little vectors**:
+
+```text
+   ┌─────────────────────────────────────────────────────────────┐
+   │  QUERY  (q)  =  "what am I looking for?"                      │
+   │                  e.g. 'a' the vowel: "I want a consonant"     │
+   │                                                               │
+   │  KEY    (k)  =  "what do I contain / what am I?"              │
+   │                  e.g. 'c': "I am a consonant"                 │
+   └─────────────────────────────────────────────────────────────┘
+```
+
+How do we measure whether token A's *query* matches token B's *key*? **Dot product.**
+
+```text
+   affinity(A, B)  =  q_A · k_B      (a single number)
+
+   q_A and k_B point the SAME way   ->   big dot product   ->  HIGH affinity
+   q_A and k_B unrelated            ->   ~zero dot product  ->  low affinity
+
+   "the vowel's query lines up with the consonant's key -> they bond"
+```
+
+So the `wei` table — which used to be hard-coded zeros — is now **built from the
+tokens themselves**: every entry `wei[t, i]` is the dot product of token `t`'s query
+with token `i`'s key.
+
+### A Single Head Of Self-Attention (the code)
+
+```python
+# let's see a single Head perform self-attention
+head_size = 16
+key   = nn.Linear(C, head_size, bias=False)
+query = nn.Linear(C, head_size, bias=False)
+value = nn.Linear(C, head_size, bias=False)
+
+k = key(x)     # (B, T, 16)
+q = query(x)   # (B, T, 16)
+wei = q @ k.transpose(-2, -1)   # (B, T, 16) @ (B, 16, T) ---> (B, T, T)
+
+tril = torch.tril(torch.ones(T, T))
+# wei = torch.zeros((T, T))     # <- the OLD flat version, now replaced
+wei = wei.masked_fill(tril == 0, float('-inf'))
+wei = F.softmax(wei, dim=-1)
+
+v = value(x)
+out = wei @ v   # instead of  wei @ x
+
+out.shape   # torch.Size([4, 8, 16])
+```
+
+### What `nn.Linear` Actually Does
+
+`nn.Linear(in_features, out_features, bias=False)` is just a matrix multiply. It
+holds a weight matrix and maps each token's `C`-dim vector down to `head_size`:
+
+```text
+   nn.Linear(C, head_size, bias=False)
+
+      weight  W : shape (head_size, C)   <- learned, init'd random (Kaiming uniform)
+      bias      : NONE here (bias=False), otherwise a (head_size,) vector added on
+
+   for one token vector  x_t  of shape (C,):
+
+      k_t = W @ x_t      ->  shape (head_size,) = (16,)
+
+   "take this token's 32 numbers, mix them into 16 numbers that ARE its key"
+```
+
+Three separate Linears = three different learned projections of the same token:
+
+```text
+        x_t (C=32)
+          │
+     ┌────┼────┬─────────┐
+     ▼    ▼              ▼
+   key  query         value          each is its own (head_size, C) matrix
+     │    │              │
+     ▼    ▼              ▼
+   k_t  q_t            v_t   (each 16-dim)
+  "what  "what          "what I'll
+   I am"  I want"        actually share"
+```
+
+### Walking The Dimensions
+
+```text
+   x       : (B, T, C)  = (4, 8, 32)   <- batch of 4, 8 tokens each, 32 channels
+
+   k = key(x)     -> (B, T, 16)        every token gets a 16-dim KEY
+   q = query(x)   -> (B, T, 16)        every token gets a 16-dim QUERY
+
+   wei = q @ k.transpose(-2, -1)
+
+         q                k.transpose(-2,-1)         wei
+     (B, T, 16)    @       (B, 16, T)        --->   (B, T, T)
+     (4, 8, 16)    @       (4, 16, 8)        --->   (4, 8, 8)
+```
+
+Why does that shape work out to `(T, T)`? Because matrix-multiplying *all queries*
+against *all keys* gives **every (query, key) pair** at once:
+
+```text
+              k1   k2   k3  ...  k8        (keys along the top)
+            ┌────────────────────────┐
+        q1  │ q1·k1 q1·k2 ...        │     row t = token t's QUERY
+        q2  │ q2·k1 q2·k2 ...        │     dotted against EVERY key
+        q3  │ q3·k1 q3·k2 ...        │
+        ... │                        │     entry (t, i) = q_t · k_i
+        q8  │ ...              q8·k8  │                 = affinity of t for i
+            └────────────────────────┘
+                                          shape: (T, T) = (8, 8)
+```
+
+The key change from before:
+
+```text
+   OLD:  wei = zeros   ->  SAME flat table reused for every batch element
+   NEW:  wei = q @ kᵀ  ->  EACH batch element gets its OWN table,
+                            because each has its own tokens -> own q, k
+
+   wei is no longer a constant. It is DATA-DEPENDENT.
+```
+
+### Mask + Softmax (same two steps as before)
+
+The raw affinities `wei[0]` (one batch element, **before** masking) are just numbers
+— positive where query/key align, negative where they don't:
+
+```text
+   wei[0]  (raw scores, q·k)              after masked_fill(tril==0, -inf)
+
+  [-1.76  0.55 -0.83  ...]               [-1.76  -inf  -inf  -inf ...]
+  [-3.33 -1.66  2.04  ...]    mask the   [-3.33 -1.66  -inf  -inf ...]
+  [-1.02 -1.26  0.08  ...]    future     [-1.02 -1.26  0.08  -inf ...]
+   ...                        ───────>    ...
+```
+
+The mask is the **same `tril` trick** — a token still may not see the future. Then
+softmax turns each row into weights that sum to 1:
+
+```text
+   wei[0]  after  F.softmax(dim=-1)   -- now DATA-DEPENDENT weights:
+
+   row 6 (token 6 deciding who to listen to):
+   [0.0176, 0.2689, 0.0215, 0.0089, 0.6812, 0.0019,  0,  0]
+              ▲▲▲▲                   ▲▲▲▲▲▲
+            position 2             position 5
+          "kind of interesting"  "VERY interesting"
+
+   token 6's query lined up strongly with position 5's key (0.68),
+   somewhat with position 2's key (0.27), and basically ignored the rest.
+
+   Compare to the OLD flat average, which would have given every
+   past token 1/6 = 0.167.  Self-attention has OPINIONS.
+```
+
+### The Value Vector: What A Token Shares
+
+One last piece. We do **not** aggregate the raw token `x` anymore. Each token also
+emits a **value** `v = value(x)`, and *that* is what gets aggregated:
+
+```text
+   out = wei @ v          (not  wei @ x)
+
+      x_t  =  the token's PRIVATE identity (all 32 channels of raw info)
+      v_t  =  "if you decide to listen to me, THIS is what I'll tell you"
+
+   think of it as:
+      q  =  what I'm looking for
+      k  =  what I am (for matching purposes)
+      v  =  what I actually deliver if matched
+```
+
+```text
+   out = wei @ v
+
+     (B, T, T)   @   (B, T, 16)   --->   (B, T, 16)
+     (4, 8, 8)   @   (4, 8, 16)   --->   (4, 8, 16)
+
+   each output token = weighted sum of the VALUES of the tokens it chose to attend to
+```
+
+So `out` comes out `head_size`-dim (16), not `C`-dim — the head has gathered the
+past into a fresh 16-dim summary, weighted by genuine, learned interest.
+
+### Memory hook
+
+```text
+problem  = flat average treats every past token equally -- no opinions
+fix      = self-attention: gather from the past in a DATA-DEPENDENT way
+
+each token emits 3 vectors (via nn.Linear projections of x):
+   query (q) = what am I looking for?
+   key   (k) = what do I contain?
+   value (v) = what will I share if you listen to me?
+
+wei = q @ kᵀ          -> affinity of every token for every other (B,T,T)
+   (replaces the old hard-coded zeros -- now built FROM the tokens)
+mask -inf + softmax   -> still no peeking at the future; rows sum to 1
+out = wei @ v         -> weighted sum of VALUES, not raw x   (B,T,head_size)
+
+x = private identity   |   v = what I broadcast   |   wei = how much you tune in
+```
+
+---
+
+## Six Things To Really Understand About Attention
+
+Now that a single head works, here are the ideas that make attention click — the
+ones easy to miss the first time.
+
+### 1) Attention Is A Communication Mechanism (it's a graph)
+
+Forget words for a second. Attention is just **nodes in a directed graph** passing
+messages. Each node holds a vector of info; a node updates itself by taking a
+**weighted sum of every node that points to it**.
+
+```text
+   a GENERAL attention graph                our LANGUAGE-MODEL graph
+   (any edges allowed)                      (autoregressive: only point backward)
+
+        ┌──►(1)◄──┐                          (0)   (1)   (2)  ...  (7)
+       (0)        (2)                         ▲     ▲     ▲          ▲
+        ▲  ╲    ╱  │                          │     │     │          │
+        │   ╳     ▼                       node 0: just itself
+       (5)─►(4)─►(3)                       node 1: 0, 1
+            edges point                    node 2: 0, 1, 2
+            every which way                ...
+                                           node 7: 0,1,2,3,4,5,6,7  (all the past)
+```
+
+For an 8-token block (`block_size = 8`) the graph is fixed and triangular:
+
+```text
+   node 0  ◄── {0}                     "I can only see myself"
+   node 1  ◄── {0,1}                   "myself + 1 token back"
+   node 2  ◄── {0,1,2}
+   node 3  ◄── {0,1,2,3}
+   node 4  ◄── {0,1,2,3,4}
+   node 5  ◄── {0,1,2,3,4,5}
+   node 6  ◄── {0,1,2,3,4,5,6}
+   node 7  ◄── {0,1,2,3,4,5,6,7}       "myself + all 7 tokens of history"
+
+   This triangular pattern IS the tril mask. The autoregressive rule = the graph.
+```
+
+### 2) Attention Has No Sense Of Space
+
+Attention acts over a **set** of vectors. The nodes have **no idea where they sit**
+in the sequence — there are no arrows that say "I'm 3rd." That's why we had to add
+**positional embeddings**: we *anchor* each token with its position so it knows where
+it is.
+
+```text
+   attention sees:   { •  •  •  •  •  •  •  • }   <- an unordered SET
+                       no built-in "1st, 2nd, 3rd..."
+
+   so we inject it:  token_emb + position_emb     <- now each node knows its slot
+
+   (contrast: a CONVOLUTION has a fixed spatial layout — the filter slides over
+    a KNOWN grid of positions. Attention does not. It must be TOLD positions.)
+```
+
+### 3) Batch Elements Never Talk To Each Other
+
+The `B` dimension is fully independent. With `B=4, T=8`, you have **4 separate pools
+of 8 nodes**. Nodes only mix *within* their own pool.
+
+```text
+   batch 0:  (•••••••• )   <- 8 nodes, fully connected (causally) to each other
+   batch 1:  (•••••••• )   <- separate pool, never sees batch 0
+   batch 2:  (•••••••• )
+   batch 3:  (•••••••• )
+
+   32 nodes processed in total, but as 4 isolated groups of 8. No cross-pool edges.
+```
+
+### 4) Encoder vs Decoder: The Mask Is Optional
+
+The `masked_fill(tril == 0, -inf)` line is the *only* thing forbidding the future.
+That's a **decoder** (autoregressive, for generation). Delete that one line and every
+node talks to every other node — that's an **encoder** block.
+
+```text
+   DECODER (what we built)            ENCODER (delete the mask line)
+   wei.masked_fill(tril==0, -inf)     # no mask at all
+
+   only see the past                  everyone sees everyone
+   needed for GENERATING text         great for e.g. sentiment analysis,
+                                       where the whole sentence is allowed
+                                       to talk to itself
+
+   Attention itself does NOT care. Both are valid; the mask is a choice.
+```
+
+### 5) Self-Attention vs Cross-Attention: Where Q, K, V Come From
+
+We built **self-attention**: query, key, and value all come from the **same** `x`.
+The nodes are attending to themselves.
+
+```text
+   SELF-ATTENTION                       CROSS-ATTENTION
+   q, k, v  all from  x                 q from x  |  k, v from ANOTHER source
+
+   x ──► query                          x ──► query
+   x ──► key                            (encoder output) ──► key
+   x ──► value                          (encoder output) ──► value
+
+   "nodes talk among themselves"        "MY nodes pull info from an external
+                                         set of nodes (e.g. an encoder that
+                                         holds the context to condition on)"
+```
+
+Cross-attention is how you *condition* on outside context: you produce queries from
+your own tokens, but read keys/values off a separate stack of nodes.
+
+### 6) Scaled Attention: The `1/√(head_size)` You're Missing
+
+Look at the paper's formula — there's a divisor we haven't used yet:
+
+```text
+                          ⎛  Q · Kᵀ  ⎞
+   Attention(Q,K,V) = softmax⎜ ─────── ⎟ V          d_k = head_size
+                          ⎝  √d_k   ⎠
+```
+
+**Why divide by √(head_size)?** If `q` and `k` are unit-Gaussian (variance ≈ 1), then
+`wei = q @ kᵀ` has variance on the order of `head_size` — the numbers get **big**.
+
+```text
+   WITHOUT scaling:                       WITH  * head_size**-0.5 :
+   k.var() ≈ 1.04                         k.var() ≈ 0.90
+   q.var() ≈ 1.07                         q.var() ≈ 1.00
+   wei.var() ≈ 17.5   <- blown up         wei.var() ≈ 1.00   <- tamed
+```
+
+Why does a blown-up `wei` matter? It feeds straight into **softmax**, and softmax on
+large-magnitude inputs **sharpens toward a one-hot vector**:
+
+```text
+   softmax([0.1, -0.2, 0.3, -0.2, 0.5])      -> [0.19, 0.14, 0.24, 0.14, 0.29]
+                                                  nicely DIFFUSE -- spreads attention
+
+   softmax([0.1, -0.2, 0.3, -0.2, 0.5] * 8)  -> [0.03, 0.00, 0.16, 0.00, 0.80]
+                                                  PEAKY -- collapses onto one node
+```
+
+A too-peaky softmax means each token basically copies a **single** other node instead
+of *blending* the past. Why is that bad? Two reasons:
+
+**(a) You throw away context.** The whole point of attention is that a token's meaning
+comes from *several* past tokens together. Collapse to one-hot and you grab info from
+exactly one position, ignoring the rest:
+
+```text
+   blended (wei.var ≈ 1):   out = 0.3·v2 + 0.4·v5 + 0.3·v6   <- mixes 3 contexts
+   peaky   (wei.var ≈ 17):  out = 1.0·v5                     <- just a COPY of v5
+
+   all that q/k/v machinery, and the aggregation became a no-op.
+```
+
+**(b) The real killer — it breaks learning at initialization.** At the start of
+training `q` and `k` are random, so the affinities are essentially **noise**. There is
+no real signal yet about which past token matters.
+
+```text
+   diffuse softmax  ->  noisy guess -> gentle near-uniform blend
+                        gradient flows to ALL past tokens -> model gently learns
+
+   peaky softmax    ->  random noise amplified into a CONFIDENT one-hot
+                        model commits hard to whatever the random init favored...
+                        ...a decision based on nothing
+```
+
+And softmax is nearly flat (derivative → 0) once it saturates, so a peaky softmax also
+**starves the other nodes of gradient** — it makes a bad random choice *and* makes that
+choice hard to correct later. Learning stalls.
+
+```text
+   softmax saturated near one-hot  ->  gradient ≈ 0 for the non-selected nodes
+                                       (the vanishing-gradient region of softmax)
+```
+
+Dividing by `√(head_size)` keeps `wei.var ≈ 1`, so at init the softmax stays diffuse:
+attention starts as a soft average over the past (much like the flat-average baseline
+from earlier) and *learns* to sharpen onto the right tokens as training reveals real
+structure. You want sharpening to be **earned from data**, not handed out for free by
+an unlucky random seed.
+
+> One-line version: a peaky-at-init softmax makes **confident decisions from noise**,
+> and then can't backpropagate its way out of them.
+
+### Memory hook
+
+```text
+1. graph     = attention is nodes aggregating from whoever points to them;
+               our LM graph is triangular (node t sees 0..t) = the tril mask
+2. no space  = attention sees an unordered SET -> must ADD positional embeddings
+3. batches   = B pools are independent; nodes never cross batch elements
+4. mask      = keep it -> DECODER (causal, generation);
+               drop it -> ENCODER (all-to-all, e.g. sentiment)
+5. self/cross= self: q,k,v from x  |  cross: q from x, k,v from another source
+6. scale     = divide q·kᵀ by √(head_size) so wei.var ≈ 1, keeping softmax
+               diffuse instead of collapsing to one-hot
+```
+
+---
+
+## Wiring A Self-Attention Head Into The Network
+
+Time to package everything into a reusable module and actually plug it into the model.
+
+```python
+class Head(nn.Module):
+    """ one head of self-attention """
+
+    def __init__(self, head_size):
+        super().__init__()
+        self.key   = nn.Linear(n_embd, head_size, bias=False)
+        self.query = nn.Linear(n_embd, head_size, bias=False)
+        self.value = nn.Linear(n_embd, head_size, bias=False)
+        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        B, T, C = x.shape
+        k = self.key(x)    # (B,T,C)
+        q = self.query(x)  # (B,T,C)
+        # compute attention scores ("affinities")
+        wei = q @ k.transpose(-2, -1) * C**-0.5   # (B,T,C) @ (B,C,T) -> (B,T,T)
+        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))  # (B,T,T)
+        wei = F.softmax(wei, dim=-1)              # (B,T,T)
+        wei = self.dropout(wei)
+        # perform the weighted aggregation of the values
+        v = self.value(x)  # (B,T,C)
+        out = wei @ v      # (B,T,T) @ (B,T,C) -> (B,T,C)
+        return out
+```
+
+Two small-but-important details that turn the loose code into a real module:
+
+```text
+   register_buffer('tril', ...)   <- tril is NOT a parameter (nothing to learn).
+                                     register_buffer parks it on the module so it
+                                     moves to GPU with .to(device) and is saved,
+                                     but the optimizer never touches it.
+
+   self.tril[:T, :T]              <- crop to the ACTUAL sequence length T, so the
+                                     same head works whether T is 8 (training) or
+                                     1,2,3... (early steps of generation).
+```
+
+Now wire one head into the model: embed tokens, add positions, **let them
+communicate**, then project to vocab logits.
+
+```python
+class BigramLanguageModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.token_embedding_table    = nn.Embedding(vocab_size, n_embd)
+        self.position_embedding_table = nn.Embedding(block_size, n_embd)
+        self.sa_head = Head(n_embd)                       # <-- NEW: self-attention
+        self.lm_head = nn.Linear(n_embd, vocab_size)
+
+    def forward(self, idx, targets=None):
+        B, T = idx.shape
+        tok_emb = self.token_embedding_table(idx)                       # (B,T,C)
+        pos_emb = self.position_embedding_table(torch.arange(T, device=device))  # (T,C)
+        x = tok_emb + pos_emb                                           # (B,T,C)
+        x = self.sa_head(x)        # apply one head of self-attention.  # (B,T,C)
+        logits = self.lm_head(x)                                        # (B,T,vocab_size)
+        ...
+```
+
+### One Gotcha In `generate`: Crop The Context
+
+The old bigram model could take any-length context. But now we have a
+`position_embedding_table` that only knows positions `0 .. block_size-1`. Feed it a
+sequence longer than `block_size` and it has no embedding for position 9, 10, ... and
+crashes. So in `generate` we **crop to the last `block_size` tokens**:
+
+```python
+for _ in range(max_new_tokens):
+    idx_cond = idx[:, -block_size:]     # <-- crop! never feed more than block_size
+    logits, loss = self(idx_cond)
+    logits = logits[:, -1, :]           # focus on the last time step -> (B, C)
+    probs = F.softmax(logits, dim=-1)
+    idx_next = torch.multinomial(probs, num_samples=1)
+    idx = torch.cat((idx, idx_next), dim=1)
+```
+
+### Also: Drop The Learning Rate
+
+```python
+learning_rate = 1e-3    # was higher before
+```
+
+Self-attention is a more delicate beast than a plain lookup table — it **can't
+tolerate a very high learning rate**. Lower it so training stays stable. The payoff:
+
+```text
+   plain bigram (no attention):   loss ≈ 2.5
+   + one self-attention head:     loss ≈ 2.4   <- the head is clearly DOING something
+
+   tokens are now communicating, and it shows up in the loss.
+```
+
+---
+
+## Multi-Head Attention: Several Conversations At Once
+
+One head gives each token **one** way to look at the past — a single query/key
+pattern. But a token often needs to ask **several different questions at the same
+time**:
+
+```text
+   the token 'a' (a vowel) might simultaneously want to know:
+
+     head 1:  "where's the nearest consonant?"        (phonetics)
+     head 2:  "what word am I inside of?"             (boundaries)
+     head 3:  "is there a vowel I should agree with?" (harmony)
+     head 4:  "how far back is the sentence start?"   (position-ish)
+
+   one head can only chase ONE of these. We want all four AT ONCE.
+```
+
+> *"With a single attention head, averaging inhibits the ability to attend to
+> information from different representation subspaces at different positions."*
+> — Attention Is All You Need
+
+So we run **several heads in parallel**, each with its own `q/k/v` projections (its own
+"representation subspace"), and **concatenate** their outputs.
+
+### How It's Done: Split, Attend, Concatenate
+
+The trick is that the heads are **smaller**. Instead of one head of size 32, we use
+**4 heads of size 8**, run them independently, and glue the results back together along
+the channel dimension to recover the original 32:
+
+```text
+                       x  (B, T, 32)
+                       │
+        ┌──────────┬───┴───┬──────────┐         4 heads, each sees the SAME x
+        ▼          ▼       ▼          ▼          but with its OWN q/k/v weights
+     head 1     head 2  head 3     head 4
+   (B,T,8)     (B,T,8) (B,T,8)    (B,T,8)        each outputs an 8-dim summary
+        │          │       │          │
+        └──────────┴───┬───┴──────────┘
+                       ▼
+              concat over channels
+                  (B, T, 32)                     8 + 8 + 8 + 8 = 32 = n_embd
+
+   four parallel "communication channels", each smaller, recombined into the full width
+```
+
+```python
+class MultiHeadAttention(nn.Module):
+    """ multiple heads of self-attention in parallel """
+
+    def __init__(self, num_heads, head_size):
+        super().__init__()
+        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
+
+    def forward(self, x):
+        return torch.cat([h(x) for h in self.heads], dim=-1)   # concat over channels
+```
+
+```python
+# in the model:
+self.sa_heads = MultiHeadAttention(4, n_embd // 4)   # 4 heads of 8-dim self-attention
+#                                   ^         ^
+#                              num_heads   head_size = 32 // 4 = 8
+```
+
+```text
+   WHY split instead of just adding more big heads?
+
+   - each head specializes in a DIFFERENT kind of relationship (its own subspace)
+   - running them in parallel is cheap and keeps total width = n_embd
+   - concatenating lets the next layer mix all the specialists' findings
+
+   it's like a GROUP CONVOLUTION: instead of one big conv over everything, you do
+   several smaller convolutions in separate groups, then combine.
+```
+
+This is exactly the paper's `MultiHead(Q,K,V) = Concat(head₁,...,head_h) Wᴼ` — each
+`headᵢ = Attention(QWᵢ, KWᵢ, VWᵢ)` is one of our small heads with its own projections.
+
+---
+
+## The Transformer Block: Communication + Computation
+
+Here's the famous diagram from *Attention Is All You Need*. We can already spot the
+pieces we've built:
+
+<div align="center">
+<svg viewBox="0 300 600 600" width="440" style="max-width:100%;height:auto;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <defs>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#333"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="600" height="900" fill="white"/>
+
+  <!-- ===== outer Nx boxes ===== -->
+  <rect x="100" y="540" width="150" height="220" rx="10" fill="#F7F7F7" stroke="#BBBBBB"/>
+  <rect x="350" y="444" width="150" height="316" rx="10" fill="#F7F7F7" stroke="#BBBBBB"/>
+  <text x="84" y="654" font-size="14" font-style="italic" text-anchor="middle" fill="#333">N&#215;</text>
+  <text x="516" y="606" font-size="14" font-style="italic" text-anchor="middle" fill="#333">N&#215;</text>
+
+  <!-- ===== residual (skip) bypass lines ===== -->
+  <g fill="none" stroke="#8a8a8a" stroke-width="1" marker-end="url(#ah)">
+    <path d="M175,742 H115 V683 H108"/>
+    <path d="M175,650 H125 V583 H108"/>
+    <path d="M425,742 H365 V683 H358"/>
+    <path d="M425,650 H375 V583 H358"/>
+    <path d="M425,552 H375 V487 H358"/>
+  </g>
+
+  <!-- ===== main flow arrows ===== -->
+  <g fill="none" stroke="#333" stroke-width="1.5" marker-end="url(#ah)">
+    <!-- encoder spine -->
+    <path d="M175,866 V858"/>            <!-- inputs -> input emb -->
+    <path d="M175,820 V802"/>            <!-- input emb -> + -->
+    <path d="M175,776 V738"/>            <!-- + -> MHA -->
+    <path d="M175,666 V638"/>            <!-- add&norm -> feed forward -->
+    <!-- decoder spine -->
+    <path d="M425,860 V858"/>            <!-- outputs -> output emb -->
+    <path d="M425,820 V802"/>            <!-- output emb -> + -->
+    <path d="M425,776 V738"/>            <!-- + -> masked MHA -->
+    <path d="M425,666 V638"/>            <!-- add&norm -> cross MHA -->
+    <path d="M425,566 V542"/>            <!-- add&norm -> feed forward -->
+    <path d="M425,470 V436"/>            <!-- add&norm -> linear -->
+    <path d="M425,398 V382"/>            <!-- linear -> softmax -->
+    <path d="M425,344 V330"/>            <!-- softmax -> output prob -->
+    <!-- positional encoding into the + nodes -->
+    <path d="M108,788 H161"/>
+    <path d="M492,788 H439"/>
+    <!-- encoder output -> decoder cross-attention (K and V) -->
+    <path d="M175,560 V524 H300 V612 H356"/>
+    <path d="M188,560 V512 H314 V626 H356"/>
+  </g>
+
+  <!-- ===== positional encoding sinusoid circles ===== -->
+  <g fill="white" stroke="#333" stroke-width="1.3">
+    <circle cx="90" cy="788" r="16"/>
+    <circle cx="510" cy="788" r="16"/>
+  </g>
+  <g fill="none" stroke="#333" stroke-width="1.3">
+    <path d="M80,788 q5,-9 10,0 t10,0"/>
+    <path d="M500,788 q5,-9 10,0 t10,0"/>
+  </g>
+  <text x="90" y="826" font-size="9" text-anchor="middle" fill="#333">Positional</text>
+  <text x="90" y="837" font-size="9" text-anchor="middle" fill="#333">Encoding</text>
+  <text x="510" y="826" font-size="9" text-anchor="middle" fill="#333">Positional</text>
+  <text x="510" y="837" font-size="9" text-anchor="middle" fill="#333">Encoding</text>
+
+  <!-- ===== the (+) add nodes ===== -->
+  <g>
+    <circle cx="175" cy="788" r="12" fill="white" stroke="#333" stroke-width="1.3"/>
+    <circle cx="425" cy="788" r="12" fill="white" stroke="#333" stroke-width="1.3"/>
+    <path d="M167,788 H183 M175,780 V796 M417,788 H433 M425,780 V796" stroke="#333" stroke-width="1.3"/>
+  </g>
+
+  <!-- ===== boxes (helper layout) ===== -->
+  <!-- pink: embeddings -->
+  <g>
+    <rect x="110" y="820" width="130" height="34" rx="4" fill="#F8CECC" stroke="#B85450"/>
+    <text x="175" y="841" font-size="10.5" text-anchor="middle" fill="#333">Input Embedding</text>
+    <rect x="360" y="820" width="130" height="34" rx="4" fill="#F8CECC" stroke="#B85450"/>
+    <text x="425" y="841" font-size="10.5" text-anchor="middle" fill="#333">Output Embedding</text>
+  </g>
+
+  <!-- orange: attention -->
+  <g>
+    <rect x="110" y="700" width="130" height="36" rx="4" fill="#FFE6CC" stroke="#D79B00"/>
+    <text x="175" y="722" font-size="10" text-anchor="middle" fill="#333">Multi-Head Attention</text>
+
+    <rect x="360" y="700" width="130" height="36" rx="4" fill="#FFE6CC" stroke="#D79B00"/>
+    <text x="425" y="714" font-size="9.5" text-anchor="middle" fill="#333">Masked Multi-Head</text>
+    <text x="425" y="726" font-size="9.5" text-anchor="middle" fill="#333">Attention</text>
+
+    <rect x="360" y="600" width="130" height="36" rx="4" fill="#FFE6CC" stroke="#D79B00"/>
+    <text x="425" y="622" font-size="10" text-anchor="middle" fill="#333">Multi-Head Attention</text>
+  </g>
+
+  <!-- yellow: add & norm -->
+  <g>
+    <rect x="110" y="666" width="130" height="32" rx="4" fill="#FFF2CC" stroke="#D6B656"/>
+    <text x="175" y="685" font-size="10" text-anchor="middle" fill="#333">Add &amp; Norm</text>
+    <rect x="110" y="566" width="130" height="32" rx="4" fill="#FFF2CC" stroke="#D6B656"/>
+    <text x="175" y="585" font-size="10" text-anchor="middle" fill="#333">Add &amp; Norm</text>
+
+    <rect x="360" y="666" width="130" height="32" rx="4" fill="#FFF2CC" stroke="#D6B656"/>
+    <text x="425" y="685" font-size="10" text-anchor="middle" fill="#333">Add &amp; Norm</text>
+    <rect x="360" y="566" width="130" height="32" rx="4" fill="#FFF2CC" stroke="#D6B656"/>
+    <text x="425" y="585" font-size="10" text-anchor="middle" fill="#333">Add &amp; Norm</text>
+    <rect x="360" y="470" width="130" height="32" rx="4" fill="#FFF2CC" stroke="#D6B656"/>
+    <text x="425" y="489" font-size="10" text-anchor="middle" fill="#333">Add &amp; Norm</text>
+  </g>
+
+  <!-- blue: feed forward -->
+  <g>
+    <rect x="110" y="602" width="130" height="36" rx="4" fill="#DAE8FC" stroke="#6C8EBF"/>
+    <text x="175" y="624" font-size="10" text-anchor="middle" fill="#333">Feed Forward</text>
+    <rect x="360" y="504" width="130" height="36" rx="4" fill="#DAE8FC" stroke="#6C8EBF"/>
+    <text x="425" y="526" font-size="10" text-anchor="middle" fill="#333">Feed Forward</text>
+  </g>
+
+  <!-- purple: linear -->
+  <rect x="360" y="398" width="130" height="36" rx="4" fill="#E1D5E7" stroke="#9673A6"/>
+  <text x="425" y="420" font-size="10.5" text-anchor="middle" fill="#333">Linear</text>
+
+  <!-- green: softmax -->
+  <rect x="360" y="344" width="130" height="36" rx="4" fill="#D5E8D4" stroke="#82B366"/>
+  <text x="425" y="366" font-size="10.5" text-anchor="middle" fill="#333">Softmax</text>
+
+  <!-- ===== outer labels ===== -->
+  <text x="425" y="320" font-size="12" text-anchor="middle" fill="#333">Output Probabilities</text>
+  <text x="175" y="878" font-size="12" text-anchor="middle" fill="#333">Inputs</text>
+  <text x="425" y="876" font-size="12" text-anchor="middle" fill="#333">Outputs</text>
+  <text x="425" y="890" font-size="9.5" text-anchor="middle" fill="#666">(shifted right)</text>
+</svg>
+</div>
+
+<p align="center"><sub><em>Figure 1 of <a href="https://arxiv.org/pdf/1706.03762">Attention Is All You Need</a> — left column is the encoder, right column is the decoder.</em></sub></p>
+
+What we already have: **token + positional embedding** (the pink boxes `⊕` the
+sinusoid), the **masked multi-head attention** (orange, decoder side), the **feed
+forward** (blue), and the final **linear + softmax** (purple → green). We are building
+only the **decoder** column (causal). We skip the middle orange box — the
+**cross-attention to an encoder** — because a plain language model has no encoder to
+condition on.
+
+The one piece we haven't built yet sits right after attention: **Feed Forward**.
+
+---
+
+## Feed-Forward: Give Each Token Time To Think
+
+After attention, the tokens have **looked at each other** and gathered information — but
+they haven't had a moment to **process** what they gathered. Attention is *communication*;
+it does not, by itself, do much *computation per token*.
+
+```text
+   attention   = the tokens TALK    (gather info from the past)
+   feed-forward = each token THINKS  (digest what it just gathered)
+
+   without the feed-forward, a token collects neighbors' values and immediately has to
+   produce logits -- no chance to transform/combine that info first.
+```
+
+The feed-forward is just a tiny **MLP** applied to each token: a linear layer, then a
+ReLU non-linearity.
+
+```python
+class FeedForward(nn.Module):
+    """ a simple linear layer followed by a non-linearity """
+
+    def __init__(self, n_embd):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_embd, n_embd),
+            nn.ReLU(),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+```
+
+This matches the paper's `FFN(x) = max(0, xW₁ + b₁)W₂ + b₂` — two linear layers with a
+ReLU in between (`max(0, ·)` *is* ReLU).
+
+**Why a non-linearity?** Without ReLU, stacking linear layers collapses into a single
+linear layer — no extra power. The ReLU is what lets the token compute genuinely new,
+non-linear features from what attention gathered.
+
+```text
+   Linear -> ReLU -> ... :  can represent curves, gates, "if this then that"
+   Linear -> Linear     :  collapses to one Linear -- no thinking, just re-projection
+```
+
+**Crucially, this is per-token and independent.** Every token runs through the *same*
+MLP on its *own* vector — no mixing across positions here (the mixing already happened
+in attention).
+
+```text
+   token 0 ─► [MLP] ─► token 0'      same weights for every token,
+   token 1 ─► [MLP] ─► token 1'      applied position-by-position,
+   token 2 ─► [MLP] ─► token 2'      completely independently.
+     ...                             (it's "position-wise")
+```
+
+```python
+# in the model:
+self.sa_heads = MultiHeadAttention(4, n_embd // 4)   # the tokens talk
+self.ffwd     = FeedForward(n_embd)                  # then each token thinks
+...
+x = self.sa_heads(x)   # (B,T,C)  communication
+x = self.ffwd(x)       # (B,T,C)  computation
+logits = self.lm_head(x)
+```
+
+---
+
+## The Block: Bundling Communication + Computation
+
+Attention (talk) followed by feed-forward (think) is the repeating unit of a
+Transformer. We wrap the pair into a single **`Block`** so we can stack it as many
+times as we like:
+
+```python
+class Block(nn.Module):
+    """ Transformer block: communication followed by computation """
+
+    def __init__(self, n_embd, n_head):
+        # n_embd: embedding dimension, n_head: the number of heads we'd like
+        super().__init__()
+        head_size = n_embd // n_head
+        self.sa   = MultiHeadAttention(n_head, head_size)   # communication
+        self.ffwd = FeedForward(n_embd)                     # computation
+
+    def forward(self, x):
+        x = self.sa(x)      # tokens talk to each other
+        x = self.ffwd(x)    # each token thinks on what it heard
+        return x
+```
+
+```text
+   ┌──────────────── Block ────────────────┐
+   │                                        │
+   │   x ─► Multi-Head Attention ─► Feed-   │
+   │         (communication)       Forward  │ ─► x'
+   │                               (compute)│
+   │                                        │
+   └────────────────────────────────────────┘
+        head_size = n_embd // n_head  -> heads stay small, concat back to n_embd
+
+   stack N of these  ->  Block -> Block -> Block -> ...  ->  a deep Transformer
+```
+
+`head_size = n_embd // n_head` keeps the bookkeeping automatic: however many heads you
+ask for, each is sized so their concatenation comes back out to `n_embd`. Now the whole
+model is just *embed → stack of Blocks → final linear → logits*.
+
+### Memory hook
+
+```text
+Head            = one self-attention head; register_buffer('tril') (not learned),
+                  crop tril[:T,:T]; out = softmax(q·kᵀ/√d, masked) @ v
+generate crop   = idx[:, -block_size:]  -- pos-emb only knows 0..block_size-1
+lower LR (1e-3) = attention is delicate; loss 2.5 -> 2.4 with one head
+multi-head      = run h SMALL heads in parallel (own q/k/v each), CONCAT over
+                  channels; 4 heads x 8 dims = 32 = n_embd  (like group conv)
+                  -> different heads learn different relationships (subspaces)
+feed-forward    = per-token MLP: Linear -> ReLU; tokens TALK in attention,
+                  then THINK here; ReLU = the non-linearity that enables real compute
+Block           = MultiHeadAttention (communicate) + FeedForward (compute);
+                  head_size = n_embd//n_head; stack N blocks -> deep Transformer
+the mantra      = "communication followed by computation"
+```
+
+### Stacking The Blocks Sequentially
+
+A single `Block` is one round of "talk, then think." A real Transformer is just **that
+round repeated**. We drop a few `Block`s into an `nn.Sequential`, which simply pipes the
+output of one straight into the next:
+
+```python
+class BigramLanguageModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.token_embedding_table    = nn.Embedding(vocab_size, n_embd)
+        self.position_embedding_table = nn.Embedding(block_size, n_embd)
+        self.blocks = nn.Sequential(
+            Block(n_embd, n_head=4),
+            Block(n_embd, n_head=4),
+            Block(n_embd, n_head=4),
+        )                                    # <-- 3 blocks, applied in order
+        self.lm_head = nn.Linear(n_embd, vocab_size)
+```
+
+`nn.Sequential` is just shorthand for "run these in order, feeding each one's output
+into the next":
+
+```text
+   x ─► Block ─► Block ─► Block ─► x'
+        talk/      talk/    talk/
+        think      think    think
+
+   round 1: tokens gather + digest a first pass of context
+   round 2: ...gather + digest again, now over RICHER representations
+   round 3: ...and again -> deeper, more abstract features each time
+```
+
+In `forward`, the whole stack is now a single call — replace the one-off attention/MLP
+lines with `self.blocks(x)`:
+
+```python
+    def forward(self, idx, targets=None):
+        B, T = idx.shape
+        tok_emb = self.token_embedding_table(idx)                              # (B,T,C)
+        pos_emb = self.position_embedding_table(torch.arange(T, device=device)) # (T,C)
+        x = tok_emb + pos_emb     # (B,T,C)
+        x = self.blocks(x)        # (B,T,C)  <- talk+think, three times over
+        logits = self.lm_head(x)  # (B,T,vocab_size)
+        ...
+```
+
+```text
+   the full forward, end to end:
+
+   idx ─► token_emb + position_emb ─► [Block ×3] ─► lm_head ─► logits
+           "what + where"              "talk/think    "project to
+                                        repeatedly"     vocab scores"
+```
+
+Stacking deepens the model — but as we'll see next, stacking *too* naively makes deep
+nets hard to train, which is exactly what residual connections and layer-norm are about
+to fix.
