@@ -1544,6 +1544,22 @@ Three separate Linears = three different learned projections of the same token:
 
 ### Walking The Dimensions
 
+First, the symbols we use everywhere below — kept distinct **on purpose** so no two
+ever collide:
+
+```text
+   B  = batch       = 4    independent sequences in the minibatch
+   T  = block_size  = 8    tokens per sequence (time steps)
+   C  = n_embd      = 32   channels per token (the embedding width)
+
+   head_size = how wide ONE head's q/k/v vectors are
+             = 16 here  (we just picked it — with a single head it's free
+                         to be anything; later, multiple heads will FORCE
+                         this number, but we're not there yet)
+
+   Batch is 4 (NOT 32) on purpose, so "32" ALWAYS means channels, never batch.
+```
+
 ```text
    x       : (B, T, C)  = (4, 8, 32)   <- batch of 4, 8 tokens each, 32 channels
 
@@ -1885,16 +1901,16 @@ class Head(nn.Module):
 
     def forward(self, x):
         B, T, C = x.shape
-        k = self.key(x)    # (B,T,C)
-        q = self.query(x)  # (B,T,C)
+        k = self.key(x)    # (B, T, head_size)
+        q = self.query(x)  # (B, T, head_size)
         # compute attention scores ("affinities")
-        wei = q @ k.transpose(-2, -1) * C**-0.5   # (B,T,C) @ (B,C,T) -> (B,T,T)
+        wei = q @ k.transpose(-2, -1) * k.shape[-1]**-0.5  # (B,T,head_size)@(B,head_size,T) -> (B,T,T)
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))  # (B,T,T)
         wei = F.softmax(wei, dim=-1)              # (B,T,T)
         wei = self.dropout(wei)
         # perform the weighted aggregation of the values
-        v = self.value(x)  # (B,T,C)
-        out = wei @ v      # (B,T,T) @ (B,T,C) -> (B,T,C)
+        v = self.value(x)  # (B, T, head_size)
+        out = wei @ v      # (B,T,T) @ (B,T,head_size) -> (B,T,head_size)
         return out
 ```
 
@@ -1911,44 +1927,78 @@ Two small-but-important details that turn the loose code into a real module:
                                      1,2,3... (early steps of generation).
 ```
 
-Now wire one head into the model: embed tokens, add positions, **let them
-communicate**, then project to vocab logits.
+Wiring it in changes only **two lines** of the model — one in `__init__`, one in
+`forward`. Everything else (the embeddings, the final `lm_head` projection to logits) is
+the same bigram model as before, so we show just the diff:
 
 ```python
-class BigramLanguageModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.token_embedding_table    = nn.Embedding(vocab_size, n_embd)
-        self.position_embedding_table = nn.Embedding(block_size, n_embd)
-        self.sa_head = Head(n_embd)                       # <-- NEW: self-attention
-        self.lm_head = nn.Linear(n_embd, vocab_size)
+# __init__:  add the head between the embeddings and the logits
+self.sa_head = Head(n_embd)        # NEW
 
-    def forward(self, idx, targets=None):
-        B, T = idx.shape
-        tok_emb = self.token_embedding_table(idx)                       # (B,T,C)
-        pos_emb = self.position_embedding_table(torch.arange(T, device=device))  # (T,C)
-        x = tok_emb + pos_emb                                           # (B,T,C)
-        x = self.sa_head(x)        # apply one head of self-attention.  # (B,T,C)
-        logits = self.lm_head(x)                                        # (B,T,vocab_size)
-        ...
+# forward:   right after  x = tok_emb + pos_emb
+x = self.sa_head(x)                # NEW: let the tokens communicate   (B,T,C)
 ```
 
-### One Gotcha In `generate`: Crop The Context
+The data path just grew by one step:
 
-The old bigram model could take any-length context. But now we have a
-`position_embedding_table` that only knows positions `0 .. block_size-1`. Feed it a
-sequence longer than `block_size` and it has no embedding for position 9, 10, ... and
-crashes. So in `generate` we **crop to the last `block_size` tokens**:
+```text
+   before:  idx ─► tok+pos embedding ─────────────────► lm_head ─► logits
+   after:   idx ─► tok+pos embedding ─► self-attention ─► lm_head ─► logits
+                                          tokens talk
+```
+
+### First, Untangle Three "Lengths": `block_size`, `T`, `t`
+
+Almost all the confusion here — and in `generate` below — comes from three things that
+*look* like "how long is the sequence" but are **not** the same:
+
+```text
+   block_size   the FIXED cap (8). position_embedding_table has exactly
+                block_size rows -> it only knows positions 0 .. block_size-1.
+                There is NO embedding for a 9th token. This never changes.
+
+   T            how many tokens are flowing through RIGHT NOW. It VARIES:
+                during training it's the full block_size; during generation it
+                starts at 1, then 2, 3, ... T is re-read every forward pass via
+                  B, T = idx.shape
+
+   t            ONE position inside those T tokens (0 <= t < T). "token t" is
+                the t-th token. This is the t in tril[:T, :T] and in "the last
+                time step" -> token t = T-1.
+```
+
+The single rule that connects them: **`T` must never exceed `block_size`.** Break it and
+there's no position embedding for the overflow token, and the model crashes. Two tiny
+crops enforce this rule — one in the head, one in `generate`.
+
+### Two Crops, One Rule: Keep `T ≤ block_size`
+
+**Crop #1 — inside the head: `self.tril[:T, :T]`.** `tril` is built once at the maximum
+size (`block_size × block_size`). But a given forward pass might only have `T = 3` tokens,
+so we slice the mask down to match the tokens actually present:
+
+```text
+   tril (block_size=8)        tril[:T, :T] with T=3
+   ┌─────────────────┐        ┌───────┐
+   │ 1 0 0 0 0 0 0 0 │        │ 1 0 0 │
+   │ 1 1 0 0 0 0 0 0 │  ──►   │ 1 1 0 │   mask now matches the 3 tokens
+   │ 1 1 1 0 0 0 0 0 │        │ 1 1 1 │   actually present this step
+   │ ...             │        └───────┘
+   └─────────────────┘
+```
+
+**Crop #2 — inside `generate`: `idx[:, -block_size:]`.** Generation keeps **appending**
+tokens, so `idx` grows without bound and will pass `block_size`. Before each forward we
+keep only the last `block_size` tokens, guaranteeing `T ≤ block_size`:
 
 ```python
-for _ in range(max_new_tokens):
-    idx_cond = idx[:, -block_size:]     # <-- crop! never feed more than block_size
-    logits, loss = self(idx_cond)
-    logits = logits[:, -1, :]           # focus on the last time step -> (B, C)
-    probs = F.softmax(logits, dim=-1)
-    idx_next = torch.multinomial(probs, num_samples=1)
-    idx = torch.cat((idx, idx_next), dim=1)
+idx_cond = idx[:, -block_size:]   # keep only the last block_size tokens -> T <= block_size
+logits, loss = self(idx_cond)     # now every position has an embedding -> no crash
+logits = logits[:, -1, :]         # take token t = T-1 (the last one)   -> (B, C)
 ```
+
+The rest of the loop — softmax, sample, append — is unchanged from the bigram `generate`
+we already wrote.
 
 ### Also: Drop The Learning Rate
 
@@ -2014,6 +2064,27 @@ the channel dimension to recover the original 32:
    four parallel "communication channels", each smaller, recombined into the full width
 ```
 
+**The thing to get right: `x` is never chopped up.** Every head receives the *entire*
+`x` — all `(B, T, 32)` of it. The `8` is **not** a slice of `x`; it's the **output width
+of the `nn.Linear` projections inside each head**. Each head owns its own
+`key/query/value = nn.Linear(32, 8)`, so it takes the full 32-wide token and *projects it
+down* to its own 8-wide view:
+
+```text
+   x (B,T,32) ─┬─► head 1:  Linear(32,8) on the WHOLE x → q,k,v (B,T,8) → out (B,T,8)
+               ├─► head 2:  Linear(32,8) on the WHOLE x → q,k,v (B,T,8) → out (B,T,8)
+               ├─► head 3:  Linear(32,8) on the WHOLE x → q,k,v (B,T,8) → out (B,T,8)
+               └─► head 4:  Linear(32,8) on the WHOLE x → q,k,v (B,T,8) → out (B,T,8)
+
+   nothing is divided. all four heads read the SAME 32 numbers; each just compresses
+   them to 8 in its OWN way (its own learned weights). the "split" is in the OUTPUT
+   width, not in x.
+```
+
+So `head_size = 8` answers "how wide does THIS head make its q/k/v," and we pick it as
+`n_embd / n_head = 32 / 4` for exactly one reason: so the four 8-wide outputs
+concatenate back to precisely 32.
+
 ```python
 class MultiHeadAttention(nn.Module):
     """ multiple heads of self-attention in parallel """
@@ -2046,6 +2117,30 @@ self.sa_heads = MultiHeadAttention(4, n_embd // 4)   # 4 heads of 8-dim self-att
 
 This is exactly the paper's `MultiHead(Q,K,V) = Concat(head₁,...,head_h) Wᴼ` — each
 `headᵢ = Attention(QWᵢ, KWᵢ, VWᵢ)` is one of our small heads with its own projections.
+
+### What The Concatenated Output Feeds Into
+
+The concat hands back a `(B, T, 32)` tensor — the same shape `x` came in as. That's
+deliberate: it can flow straight on through the rest of the network. Two things act on it
+next, and they do **different** jobs — worth separating, because only one is non-linear:
+
+```text
+   concat (B, T, 32)
+        │
+        ├─► (1) a LINEAR projection   nn.Linear(32, 32)   ← "self.proj", the Wᴼ above.
+        │       lets the 4 heads' findings MIX together.      We add it when we optimize
+        │       Still linear — NO non-linearity here.         the net later. (same shape)
+        │
+        └─► (2) the FEED-FORWARD network                   ← THIS is the non-linear layer
+                Linear(32, ·) → ReLU → Linear(·, 32),         you're asking about. The ReLU
+                a per-token MLP.                               is what lets a token actually
+                                                              *compute*, not just re-mix.
+```
+
+So the order is: **attention (heads each read all of `x`, attend, concat) → project/mix
+→ feed-forward (each token thinks)**. Attention moved information *between* tokens; the
+feed-forward — the non-linear layer — then transforms each token *on its own*. We build
+that `FeedForward` next.
 
 ---
 
@@ -2178,41 +2273,22 @@ class Block(nn.Module):
 ask for, each is sized so their concatenation comes back out to `n_embd`. Now the whole
 model is just *embed → stack of Blocks → final linear → logits*.
 
-### Memory hook
-
-```text
-Head            = one self-attention head; register_buffer('tril') (not learned),
-                  crop tril[:T,:T]; out = softmax(q·kᵀ/√d, masked) @ v
-generate crop   = idx[:, -block_size:]  -- pos-emb only knows 0..block_size-1
-lower LR (1e-3) = attention is delicate; loss 2.5 -> 2.4 with one head
-multi-head      = run h SMALL heads in parallel (own q/k/v each), CONCAT over
-                  channels; 4 heads x 8 dims = 32 = n_embd  (like group conv)
-                  -> different heads learn different relationships (subspaces)
-feed-forward    = per-token MLP: Linear -> ReLU; tokens TALK in attention,
-                  then THINK here; ReLU = the non-linearity that enables real compute
-Block           = MultiHeadAttention (communicate) + FeedForward (compute);
-                  head_size = n_embd//n_head; stack N blocks -> deep Transformer
-the mantra      = "communication followed by computation"
-```
-
 ### Stacking The Blocks Sequentially
 
 A single `Block` is one round of "talk, then think." A real Transformer is just **that
 round repeated**. We drop a few `Block`s into an `nn.Sequential`, which simply pipes the
 output of one straight into the next:
 
+Just one line of `__init__` changes — swap the single head for a stack of blocks. The
+embeddings and `lm_head` are exactly as before:
+
 ```python
-class BigramLanguageModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.token_embedding_table    = nn.Embedding(vocab_size, n_embd)
-        self.position_embedding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.Sequential(
-            Block(n_embd, n_head=4),
-            Block(n_embd, n_head=4),
-            Block(n_embd, n_head=4),
-        )                                    # <-- 3 blocks, applied in order
-        self.lm_head = nn.Linear(n_embd, vocab_size)
+# __init__:  replaces  self.sa_head = Head(n_embd)
+self.blocks = nn.Sequential(
+    Block(n_embd, n_head=4),
+    Block(n_embd, n_head=4),
+    Block(n_embd, n_head=4),
+)                              # 3 blocks, applied in order
 ```
 
 `nn.Sequential` is just shorthand for "run these in order, feeding each one's output
@@ -2253,3 +2329,1057 @@ lines with `self.blocks(x)`:
 Stacking deepens the model — but as we'll see next, stacking *too* naively makes deep
 nets hard to train, which is exactly what residual connections and layer-norm are about
 to fix.
+
+---
+
+## Memory Hook: One Block, End To End
+
+If you remember nothing else, remember the **shapes flowing through one block**. The
+width never changes — it goes in as `(B, T, 32)` and comes out as `(B, T, 32)`. Inside,
+it fans out into heads, each head does `q·kᵀ → softmax → ·v`, the heads concat back to
+32, and a feed-forward thinks on the result:
+
+```text
+   x  (B, T, 32)                                  one token = 32 numbers
+   │
+   │   ── MULTI-HEAD ATTENTION (tokens TALK) ───────────────────────────────
+   │
+   ├─► head 1 ─┐   each head sees the WHOLE x, projects it to q,k,v (B,T,8):
+   ├─► head 2 ─┤        wei = q @ kᵀ / √8        (B,T,8)@(B,8,T) → (B,T,T)
+   ├─► head 3 ─┤        wei = softmax(mask(wei)) (B,T,T)  who attends to whom
+   └─► head 4 ─┘        out = wei @ v            (B,T,T)@(B,T,8) → (B,T,8)
+        │
+        ▼
+   concat the 4 outputs over channels:  8+8+8+8 = 32   →   (B, T, 32)
+        │
+        ▼
+   x  (B, T, 32)                  width restored after attention
+   │
+   │   ── FEED-FORWARD (each token THINKS) ─────────────────────────────────
+   │
+   ▼
+   per-token MLP:  Linear(32, ·) → ReLU → Linear(·, 32)   →   (B, T, 32)
+   │
+   ▼
+   x  (B, T, 32)                                  ← THIS is one Block.
+                                                    stack N of them for depth.
+```
+
+And the one-line gloss of each piece:
+
+```text
+Head         = ONE attention head. Sees all of x; its own Linear(32→8) makes q,k,v.
+               out = softmax(q·kᵀ/√head_size, causal-masked) @ v        → (B,T,8)
+
+Multi-head   = run h heads in PARALLEL (each its own q/k/v), then CONCAT over channels.
+               4 heads × 8 = 32 = n_embd. x is NEVER split — every head reads the full
+               x; the "8" is each head's OUTPUT width. Different heads, different
+               relationships (subspaces). Like a group convolution.
+
+Feed-forward = per-token MLP: Linear → ReLU → Linear. Attention let tokens TALK
+               (move info between positions); the FFN lets each token THINK
+               (compute on its own vector). ReLU = the non-linearity that makes it
+               more than a re-mix.
+
+Block        = Multi-head attention (communicate) + Feed-forward (compute), same
+               width in and out. head_size = n_embd // n_head. Stack N Blocks → a
+               deep Transformer.
+
+The mantra   = "communication followed by computation."
+```
+
+That's the **bare** block — the clean skeleton. Everything in the next three sections
+(residuals, LayerNorm, dropout) bolts onto *this* shape without changing the `(B,T,32)
+in → (B,T,32) out` contract. After them, we'll redraw this same hook with the training
+machinery wired in.
+
+---
+
+## Optimization 1: Residual Connections — A Gradient Superhighway
+
+### The problem: deep nets get *harder* to train, not easier
+
+You'd think more layers = more power = lower loss. In 2015 a team at Microsoft Research
+(He, Zhang, Ren, Sun — *Deep Residual Learning for Image Recognition*) showed the
+opposite. They trained a plain 20-layer net and a plain 56-layer net on the same data:
+
+```text
+   training error (plain nets, no residuals)
+
+   high │ 56-layer ······●·····              the DEEPER net is WORSE —
+        │  ╲             ●                    and not just on test data,
+        │   ╲      ●●●●●                      on the TRAINING data too.
+        │ 20-layer●●●●●●●●●●●                 it can't even fit what it sees.
+    low │            ●●●●●●●●●●●
+        └──────────────────────────► iters
+```
+
+That last point is the tell. If the 56-layer net were merely *overfitting*, it would
+have **low** training error and high test error. Instead its training error is high —
+the optimizer literally cannot push gradients down through that many layers to learn.
+The signal from the loss gets mangled on its way back to the early layers. Depth became
+an **optimization** problem, not a capacity problem.
+
+### The idea: a residual pathway you fork off from and add back to
+
+The fix is almost embarrassingly simple. Instead of forcing every block to *transform*
+its input, give the data a clean **residual pathway** straight down the middle, and let
+each block *fork off*, do its computation, and **add** its result back:
+
+```text
+   x ─────────────────┬──────────────────►  (identity: x passes straight through)
+                      │
+                      ├──► weight layer ──► ReLU ──► weight layer ──► F(x)
+                      │                                                │
+                      └────────────────────► (+) ◄─────────────────────┘
+                                              │
+                                              ▼
+                                          F(x) + x      "transform, then add yourself back"
+```
+
+So a block no longer computes `out = F(x)`. It computes `out = x + F(x)`. The block
+only has to learn the **residual** `F(x)` — the *delta* to add on top of the input —
+hence the name. You travel from input to target by **plus, and plus, and plus**: the
+representation is built up by additions, not by repeated overwrites.
+
+### Why addition is the magic: it forks the gradient, unchanged
+
+The real payoff is in backprop. Think about what an **addition node** does to a gradient
+flowing backward through it:
+
+```text
+   forward:    out = x + F(x)
+
+   backward:   d(out) arrives at the (+) node
+               │
+               ├──►  flows to x      with the SAME gradient   (×1)
+               └──►  flows to F(x)   with the SAME gradient   (×1)
+```
+
+**Addition distributes the incoming gradient equally and unchanged to both branches.**
+That `×1` on the identity branch is everything. It means the gradient from the loss can
+hop from one addition node to the next, all the way back to the very first token
+embedding, **unimpeded** — never multiplied down to zero by a long chain of weight
+matrices. You've built a **gradient superhighway** running straight from the supervision
+at the top to the inputs at the bottom.
+
+And there's a beautiful second effect at initialization. The `F(x)` branches start with
+small random weights, so at the very beginning each block contributes **almost nothing**
+— the network is basically `x → x → x → ...`, a clean identity all the way down. The
+deep stack is "not there" yet. Then, *during optimization*, the blocks **come online
+over time**, kicking in one contribution at a time as the gradient highway lets the
+optimizer find useful residuals to add. You start from a trivially-trainable identity
+and grow the depth into it.
+
+### The code change: just add `x +` in `forward`
+
+In the `Block`, wrap each sub-layer in `x + (...)`:
+
+```python
+    def forward(self, x):
+        x = x + self.sa(x)     # fork off -> self-attention -> add back to residual path
+        x = x + self.ffwd(x)   # fork off -> feed-forward   -> add back to residual path
+        return x
+```
+
+That's the whole residual connection. `self.sa(x)` is the fork-off-and-compute; the
+`x +` is the merge-back.
+
+### One catch: you need a projection on the way back
+
+There's a subtlety in *what* gets added back. Whatever a sub-layer computes has to land
+back on the residual pathway with the **same width** (`n_embd`) so the addition lines up.
+So both sub-layers end with a **linear projection back into the residual stream**:
+
+```python
+# MultiHeadAttention — after concatenating the heads:
+self.proj = nn.Linear(n_embd, n_embd)   # project concat output back onto the residual path
+...
+out = self.proj(out)                    # (B,T,32) -> (B,T,32), ready to be added to x
+```
+
+This is the `self.proj` we foreshadowed in the multi-head section (the paper's `Wᴼ`).
+It's still a linear layer — its job here is to take the concatenated head outputs and
+map them cleanly into the residual pathway's coordinate system before the `+`.
+
+### While we're here: the 4× feed-forward expansion
+
+The original Transformer paper makes the feed-forward layer's **inner** dimension `4×`
+wider than the model width — `d_model = 512`, `d_ff = 2048`. We copy that:
+
+```python
+class FeedFoward(nn.Module):
+    def __init__(self, n_embd):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_embd, 4 * n_embd),   # expand: 32 -> 128, room to compute
+            nn.ReLU(),
+            nn.Linear(4 * n_embd, n_embd),   # project back: 128 -> 32, onto residual path
+        )
+```
+
+Why `4×`? Attention is where tokens *talk*; the feed-forward is where each token *thinks*
+on its own. Giving that "thinking" a wider inner layer hands it more scratch space to
+compute richer non-linear features before squeezing the result back down to `n_embd`.
+The expand-then-project shape (`32 → 128 → 32`) is the standard MLP "bottleneck" trick.
+
+### Result: it starts to look like English
+
+With residuals + the deeper stack, the loss finally moves. Train loss drops to ~**1.9**,
+validation to ~**2.08**, and the samples stop being pure noise:
+
+```text
+   ... "Lily wall to sugin mete mot! ... She shark. Jask fow souteil big sain ..."
+```
+
+Still gibberish, but it's *English-shaped* gibberish — word-like chunks, spacing,
+punctuation, capital letters after periods. One new wrinkle to notice: **train loss
+(1.9) is now pulling ahead of validation loss (2.08)**. The model is beginning to
+**overfit** — memorizing the training text instead of generalizing. That's the cue for
+our next tool: regularization. But first, one more optimization that makes deep stacks
+train smoothly.
+
+---
+
+## Optimization 2: LayerNorm — Keeping Activations Sane
+
+### Batch norm vs. layer norm: which direction do you normalize?
+
+A deep stack also wants its activations kept on a sane scale at every layer — roughly
+zero-mean, unit-variance — so no layer is fed exploding or vanishing numbers. The classic
+tool is **batch normalization**, but Transformers use **layer normalization**. The only
+difference is *which direction you normalize over*:
+
+```text
+   a batch of activations, rows = tokens, cols = features
+
+                 feature →
+              ┌───────────────────┐
+     token ↓  │  ·   ·   ·   ·   · │  ◄── LAYER norm: normalize across a ROW
+              │  ·   ·   ·   ·   · │      (each token's own features, on its own)
+              │  ·   ·   ·   ·   · │
+              └───────────────────┘
+                 ▲
+                 │
+                 └── BATCH norm: normalize down a COLUMN
+                     (one feature across all tokens in the batch)
+```
+
+LayerNorm normalizes **each token's feature vector independently** — no dependence on the
+other examples in the batch. Karpathy's micrograd-style implementation is literally
+BatchNorm with the reduction axis flipped from `0` (batch) to `1` (features):
+
+```python
+class LayerNorm1d:                          # (used to be BatchNorm1d)
+    def __init__(self, dim, eps=1e-5):
+        self.gamma = torch.ones(dim)        # learnable scale
+        self.beta  = torch.zeros(dim)       # learnable shift
+
+    def __call__(self, x):
+        xmean = x.mean(1, keepdim=True)     # mean across FEATURES (dim 1), per token
+        xvar  = x.var(1, keepdim=True)      # variance across FEATURES, per token
+        xhat  = (x - xmean) / torch.sqrt(xvar + self.eps)   # -> unit mean/variance
+        return self.gamma * xhat + self.beta
+
+module = LayerNorm1d(100)
+x = torch.randn(32, 100)   # 32 tokens, each a 100-dim vector
+x = module(x)              # each of the 32 rows is now ~zero-mean, unit-variance
+```
+
+`gamma` and `beta` are **trainable** — so the layer normalizes to unit-Gaussian *at
+initialization*, but optimization is free to scale and shift it afterward to whatever
+distribution actually helps. It's "start normalized, then let the model decide."
+
+### Pre-norm: a small deviation from the paper
+
+The original paper applies LayerNorm **after** each sub-layer (`Add & Norm`). Modern
+practice — and what we use — applies it **before** the sub-layer instead. This is the
+**pre-norm** formulation: normalize `x`, *then* feed it into attention / feed-forward,
+then add the result back to the (un-normalized) residual pathway. Pre-norm keeps the
+residual superhighway perfectly clean — nothing rescales it between blocks — which is
+exactly why deep pre-norm Transformers are so much easier to train.
+
+Two LayerNorms per block, applied right before each sub-layer:
+
+```python
+class Block(nn.Module):
+    def __init__(self, n_embd, n_head):
+        super().__init__()
+        head_size = n_embd // n_head
+        self.sa   = MultiHeadAttention(n_head, head_size)
+        self.ffwd = FeedFoward(n_embd)
+        self.ln1  = nn.LayerNorm(n_embd)        # NEW: normalize before attention
+        self.ln2  = nn.LayerNorm(n_embd)        # NEW: normalize before feed-forward
+
+    def forward(self, x):
+        x = x + self.sa(self.ln1(x))            # norm -> attention -> add back
+        x = x + self.ffwd(self.ln2(x))          # norm -> feed-forward -> add back
+        return x
+```
+
+Read `x = x + self.sa(self.ln1(x))` left to right: the residual pathway `x` is untouched;
+we take a *normalized copy* `self.ln1(x)`, run attention on it, and add the result back.
+LayerNorm sits *inside* the fork, never on the highway itself.
+
+One more LayerNorm goes at the very end of the stack, right before the final linear layer
+that decodes into vocab logits:
+
+```python
+self.blocks = nn.Sequential(
+    Block(n_embd, n_head=4),
+    Block(n_embd, n_head=4),
+    Block(n_embd, n_head=4),
+    nn.LayerNorm(n_embd),       # NEW: final norm before the lm_head
+)
+...
+self.ln_f = nn.LayerNorm(n_embd)   # "layer norm final"
+```
+
+Result: validation nudges to ~**2.06**. A small numeric win here, but the real value of
+LayerNorm shows up when you scale depth — it's what lets the deep stack keep training
+without activations drifting.
+
+---
+
+## Regularization: Dropout — And What "Regularization" Even Means
+
+### The problem we created: overfitting
+
+Recall the warning sign from the residual section: train loss (1.9) pulling ahead of
+validation loss (2.08). That gap **is** overfitting — the model is starting to *memorize*
+the training text rather than learn patterns that generalize to text it hasn't seen.
+
+**Regularization** is the umbrella term for any technique that fights this — that
+deliberately makes the training task *harder* or the model *less able to memorize*, so it
+is forced to learn robust, general patterns instead of brittle, example-specific ones. We
+already scaled up the model (bigger `n_embd`, more layers, more heads); a bigger model
+memorizes more eagerly, so we now need a counterweight.
+
+### Dropout: randomly switch off neurons during training
+
+**Dropout** (Srivastava et al., 2014) is the counterweight. On every forward pass during
+training, it **randomly sets a fraction of activations to zero**:
+
+```text
+   full network                  with dropout (p = 0.2)
+
+     ○──○──○                        ○──✕──○      ✕ = dropped this pass
+      \/ \/                          \  /        (20% of units zeroed at random,
+      /\ /\                          /\           a DIFFERENT random 20% each pass)
+     ○──○──○                        ✕──○──○
+```
+
+Two ways to see why this helps:
+
+1. **It trains an ensemble of subnetworks.** Each forward pass zeros out a *different*
+   random subset, so you're effectively training a huge number of thinned networks that
+   share weights. At test time dropout is **turned off** and all units are active —
+   averaging over that ensemble, which is far more robust than any single net.
+2. **It prevents co-adaptation.** No neuron can rely on any *specific* other neuron always
+   being present (it might be dropped next pass), so the network can't build fragile,
+   memorized "this exact unit fires when that exact unit does" shortcuts. It's forced to
+   spread its bets across redundant, general features.
+
+In our Transformer, dropout goes in three places — at the end of multi-head attention,
+inside the feed-forward, and **on the attention affinities right after softmax**:
+
+```python
+# inside Head.forward, after softmax — randomly cut some token-to-token connections:
+wei = F.softmax(wei, dim=-1)
+wei = self.dropout(wei)        # some tokens are randomly prevented from communicating
+
+# end of MultiHeadAttention and end of FeedFoward — drop some output activations:
+out = self.dropout(self.proj(out))
+```
+
+Dropping affinities after softmax is especially neat: it randomly **severs some of the
+"who talks to whom" links** each pass, so the model can't depend on any one token always
+attending to any one other token.
+
+### The dial: the dropout rate
+
+Dropout has one hyperparameter — `p`, the fraction zeroed. We use `p = 0.2` (20%):
+
+```python
+dropout = 0.2
+```
+
+It joins the other knobs we tuned when scaling up: a **lower learning rate** (a bigger
+network takes smaller, more careful steps) and a wider model overall. The rule of thumb:
+the bigger the network, the more it *can* overfit, so the more regularization (dropout)
+you dial in to hold it back. Regularization and capacity are two ends of the same
+seesaw — you grow one, you grow the other to match.
+
+---
+
+## Memory Hook: One Block, Fully Optimized
+
+Now redraw the *same* block with the three training upgrades wired in. Nothing about the
+shapes changed — still `(B, T, 32)` in, `(B, T, 32)` out. What changed is **how the data
+travels**: there's now a clean **residual highway** running straight down, each sub-layer
+**forks off** a *normalized* copy, computes, drops some activations, and **adds** the
+result back:
+
+```text
+   x  (B, T, 32) ═══════════════════════════════╗   ← the residual HIGHWAY
+   │                                             ║     (x flows down untouched)
+   │   ── ATTENTION sub-layer ──────────         ║
+   ▼                                             ║
+   ln1(x)            LayerNorm: per-token, ~unit-Gaussian  (PRE-norm: before the layer)
+   │                                             ║
+   ├─► 4 heads ─► concat (B,T,32) ─► proj ─► dropout   = sa(ln1(x))
+   │                                             ║
+   ▼                                             ▼
+   x  =  x  +  sa(ln1(x))   ◄══════════ ADD back onto the highway   (B, T, 32)
+   │                                             ║
+   │   ── FEED-FORWARD sub-layer ──────          ║
+   ▼                                             ║
+   ln2(x)            LayerNorm again              ║
+   │                                             ║
+   ├─► Linear(32→128) ─► ReLU ─► Linear(128→32) ─► dropout   = ffwd(ln2(x))
+   │                                             ║
+   ▼                                             ▼
+   x  =  x  +  ffwd(ln2(x))  ◄═════════ ADD back onto the highway   (B, T, 32)
+   │
+   ▼
+   x  (B, T, 32)                  ← one OPTIMIZED Block. stack N, then ln_f → lm_head.
+```
+
+```python
+    def forward(self, x):
+        x = x + self.sa(self.ln1(x))      # norm → attend → drop → ADD back
+        x = x + self.ffwd(self.ln2(x))    # norm → think  → drop → ADD back
+        return x
+```
+
+And the one-line gloss of each upgrade — *why each one is there*:
+
+```text
+Residual (x + …)  = the GRADIENT SUPERHIGHWAY. The "+" node forks the gradient ×1 to
+                    both branches, so loss-signal reaches the earliest layers
+                    UNIMPEDED. At init the sub-layers ≈ 0, so the block starts as a
+                    clean identity and "comes online" during training. Lets you go DEEP.
+
+proj (Linear)     = maps a sub-layer's output back onto the residual stream's width
+                    (n_embd) so the "+" lines up. The paper's Wᴼ.
+
+4× feed-forward   = inner layer is 4×n_embd wide (32→128→32) — extra scratch space for
+                    each token to THINK before squeezing back down.
+
+LayerNorm (ln1/2) = normalize EACH TOKEN's own features to ~zero-mean/unit-var. PRE-norm
+                    = applied INSIDE the fork, before the sub-layer, so the highway
+                    itself is never rescaled. gamma/beta are learnable. Keeps deep
+                    stacks trainable. (Paper does post-norm; we deviate.)
+
+Dropout (p=0.2)   = REGULARIZATION. Randomly zero 20% of activations each pass (incl.
+                    attention affinities after softmax = randomly cut "who talks to
+                    whom"). Trains an ensemble of subnetworks; blocks co-adaptation;
+                    fights the train-ahead-of-val overfitting we saw appear.
+
+The mantra   = "communication followed by computation" — now on a gradient highway,
+               normalized at every fork, with random dropout to keep it honest.
+```
+
+---
+
+## Zoom Out: We Built a *Decoder*, Not the Whole Paper
+
+Look back at the *Attention Is All You Need* diagram — it has **two** columns. We only
+built the **right** one (the decoder), and even then we deleted one of its three boxes.
+Two deliberate differences are worth naming, because they're exactly what makes this a
+**GPT** and not a translator.
+
+### Why the paper has two columns: it was built for translation
+
+The original Transformer was a **machine-translation** model — French in, English out.
+That task has *two* sequences, so the architecture has two halves:
+
+```text
+   #  <───────── ENCODE (French) ──────────><────────── DECODE (English) ─────────>
+   #  les réseaux de neurones sont géniaux!  <START> neural networks are awesome! <END>
+```
+
+- The **encoder** (left column) reads the *entire* French sentence. Its job is just to
+  *understand* the source, so it has **no triangular mask** — every French token may
+  attend to every other French token, future included. There's nothing to "generate"
+  here, so peeking ahead is fine.
+- The **decoder** (right column) *generates* the English, one token at a time, starting
+  from a special `<START>` token and stopping at `<END>`. Because it generates
+  left-to-right, it **must** be causally masked — token *t* can only see tokens `< t`.
+
+### The middle box: cross-attention, the bridge between the two
+
+Here's the piece we dropped. The decoder needs to produce English **conditioned on** the
+French — otherwise it'd just hallucinate fluent English unrelated to the source. That
+conditioning happens in the decoder's *middle* attention box, **cross-attention**:
+
+```text
+   self-attention (ours):           cross-attention (the box we removed):
+
+     Q, K, V  all come from x          Q  comes from x   (the decoder, English so far)
+     │  │  │                           K, V come from the ENCODER's output (the French)
+     └──┴──┴── tokens talk to             │  │
+              EACH OTHER                  └──┴── English queries READ from French memory
+```
+
+The trick is *where the q/k/v come from*. In our self-attention, `q`, `k`, `v` are all
+projected from the same `x`. In cross-attention, the **query comes from the decoder** (x,
+the English generated so far — "what am I looking for?"), while the **keys and values are
+piped in from the side** — they're the **encoder's output** (the encoded French — "here's
+what's available to look at"). That arrow in the diagram running from the top of the
+encoder into the middle of the decoder *is* those keys and values being fed in.
+
+```text
+   ENCODER (French)                 DECODER (English)
+   ┌──────────────┐
+   │ self-attn    │                 ┌──────────────────┐
+   │ (no mask)    │                 │ masked self-attn │   Q,K,V from x
+   │   ...        │                 ├──────────────────┤
+   │ output ──────┼──► K, V ───────►│ CROSS-attention  │   Q from x,
+   └──────────────┘                 │                  │   K,V from encoder ◄── the bridge
+                                     ├──────────────────┤
+                                     │ feed-forward     │
+                                     └──────────────────┘
+```
+
+### What we did differently — and why GPT does the same
+
+For *our* task there is **no second sequence**. We're not translating anything; we just
+continue text from itself. So:
+
+```text
+   ✗ drop the ENCODER         — there is no source sentence to encode.
+   ✗ drop CROSS-attention     — there is nothing on the side to condition on;
+                                our keys/values come from x, same as the queries.
+   ✓ keep MASKED self-attn    — we still generate left-to-right, so the causal
+                                triangular mask stays.
+```
+
+What's left is a single causal stack: masked self-attention + feed-forward, repeated.
+That **decoder-only** design is exactly what GPT uses. A GPT is just the right-hand
+column of the paper, with the cross-attention box removed — an unconditional,
+left-to-right text generator. Everything we built in this post **is** that model in
+miniature.
+
+---
+
+## The Hyperparameters: Every Knob, And How To Tune It
+
+```python
+# hyperparameters
+batch_size = 16      # how many independent sequences we process in parallel
+block_size = 32      # the maximum context length for predictions
+max_iters = 5000     # total training steps
+eval_interval = 100  # how often we measure loss
+learning_rate = 1e-3 # the optimizer's step size
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+eval_iters = 200     # how many batches we average over when measuring loss
+n_embd = 64          # the model width (channels per token)
+n_head = 4           # number of attention heads per block
+n_layer = 4          # number of Blocks stacked
+dropout = 0.0        # fraction of activations randomly zeroed
+```
+
+It helps to split these into **two families**. Some shape the *model* (its size and
+capacity); some shape the *training* (how it learns). A useful mental picture:
+
+```text
+   ARCHITECTURE knobs  →  decide the model's SHAPE & CAPACITY  (set once, baked in)
+        n_embd, n_head, n_layer, block_size, dropout
+
+   OPTIMIZATION knobs  →  decide HOW it LEARNS                 (only affect training)
+        learning_rate, batch_size, max_iters
+
+   BOOKKEEPING knobs   →  just for measuring / hardware        (no effect on the model)
+        eval_interval, eval_iters, device
+```
+
+### The architecture knobs (model capacity)
+
+**`n_embd = 64` — the model width.** This is `C`, the number of channels in every token
+vector — the size of the residual stream that flows down the whole network. Bigger
+`n_embd` = each token carries more information = more capacity, but cost grows roughly
+with its square (every Linear layer is `n_embd × n_embd`-ish). It's the single biggest
+lever on model size. *Constraint:* it must be divisible by `n_head`.
+
+> **Intuition (char-level).** Each token here is a single **character** (`vocab` ≈ 65
+> distinct chars: `a–z`, `A–Z`, space, punctuation). `n_embd = 64` means we describe one
+> character with **64 numbers** — a little fact-sheet about it:
+>
+> ```text
+>    the character 'b', as 64 numbers, learns to encode things like:
+>      • am I a consonant or a vowel?        • uppercase or lowercase?
+>      • am I punctuation / whitespace?       • do I usually start a word?
+>      • what tends to follow me?             • ... (60-odd more learned features)
+> ```
+>
+> More channels = a richer fact-sheet per character. With only 2 numbers you could barely
+> store "vowel? loud?"; with 64 the model has room to track dozens of subtle properties.
+
+**`n_head = 4` — heads per attention block.** How many *parallel* attention patterns each
+block runs. Recall `head_size = n_embd // n_head = 64 // 4 = 16`: the heads **split the
+width among themselves**, so more heads = more *distinct* relationships the block can
+track at once, but each head is *narrower*. It does **not** add parameters — it
+re-partitions the same width. Tune it as a small set of divisors of `n_embd` (2, 4, 8).
+
+> **Intuition (char-level).** A single attention head can only chase **one kind of
+> question** at a time. With 4 heads, the block asks four different questions about the
+> previous characters *at once*:
+>
+> ```text
+>    head 1:  "where's the nearest consonant?"          (phonetics)
+>    head 2:  "what word am I inside of?"               (boundaries)
+>    head 3:  "is there a vowel I should agree with?"   (harmony)
+>    head 4:  "how far back is the sentence start?"     (position-ish)
+> ```
+>
+> One head can only follow ONE of these threads. We want all four **simultaneously** — so
+> we run four narrow heads in parallel, each free to specialize on its own relationship,
+> then concat their answers back together. More heads = more questions in flight per step.
+
+**`n_layer = 4` — how many Blocks are stacked.** Depth. Each Block is one round of
+"communicate then compute"; more layers = more rounds = more abstract features, but also
+a longer gradient path (this is exactly why residuals + LayerNorm matter). Width
+(`n_embd`) and depth (`n_layer`) are the two ways to grow capacity; balancing them is its
+own small art (see tuning, below).
+
+> **Intuition (char-level).** Each layer builds a *bigger unit of meaning* out of the
+> layer below it — characters → fragments → words → phrasing:
+>
+> ```text
+>    input    :  c  o  n  s  o  n  a  n  t       (raw characters)
+>    layer 1  →  "co" "on" "ns" ...              letter PAIRS / common digraphs
+>    layer 2  →  "cons"  "onan"                  fragments / syllables
+>    layer 3  →  "consonant"                     whole words, spelling rules
+>    layer 4  →  "...a CONSONANT, so a vowel likely comes next"   phrasing / grammar
+> ```
+>
+> Depth = how many times you re-abstract. One layer sees characters; four layers can reason
+> about words and what should grammatically follow.
+
+**`block_size = 32` — the context length `T`.** The maximum number of past tokens the
+model can attend to when predicting the next one — its "attention span." It sets the
+number of rows in the positional-embedding table, and attention cost grows with its
+**square** (`T × T` affinity matrix), which is why long context is expensive. A token at
+position 0 has 1 token of context; a token at position 31 has 32. Predictions never see
+further back than this.
+
+> **Intuition (char-level).** It's how many previous **characters** the model may look
+> back at to guess the next one. With `block_size = 32`, predicting the `?` here:
+>
+> ```text
+>    ... t h e   c o n s o n a n ?          ← only the last ≤ 32 chars are visible
+>        └──────── ≤ 32 chars ───────┘         (it sees "...consonan", predicts 't')
+> ```
+>
+> Too small and it can't remember the start of a long word; double it and the model sees
+> twice as far back — but the attention matrix gets 4× bigger (`32² → 64²`).
+
+**`dropout = 0.0` — regularization strength.** The fraction of activations randomly zeroed
+each step (see the dropout section). It's `0.0` here because for **pretraining on a large
+corpus the data is barely repeated**, so there's little to overfit — dropout would just
+slow learning. You dial it up (0.1–0.2) when the model is large relative to the data, or
+when **finetuning** on a small dataset where overfitting is the real risk.
+
+> **Intuition (char-level).** Dropout randomly **hides some of what the model just
+> computed**, so it can't lean on one brittle shortcut like "the char after `q` is *always*
+> `u`." Forced to cope without that one clue sometimes, it learns sturdier, more general
+> spelling habits. `0.0` = never hide anything (fine when data is plentiful);
+> `0.2` = hide a fifth of it each step (when the model would otherwise memorize).
+
+### The optimization knobs (how it learns)
+
+**`learning_rate = 1e-3` — the step size.** The most important knob to get right. After
+backprop computes the gradient, the optimizer (AdamW) steps each weight by roughly
+`-learning_rate × gradient`. Too high → training diverges or oscillates (loss spikes to
+NaN); too low → it crawls and may get stuck. `1e-3` is on the high side, which is fine for
+a *small* model like this; bigger models need smaller rates (GPT-2-scale uses ~`3e-4` to
+`6e-4`). It is **not** a single fixed number in serious runs — see the schedule below.
+
+> **Intuition (char-level).** It's how *boldly* the model rewrites its spelling rules
+> after each mistake. Predict `q → x`, see the answer was `u`? A big learning rate
+> over-corrects ("`q` is ALWAYS `u`!"); a tiny one barely nudges the belief. You want
+> steps big enough to learn fast, small enough not to overshoot.
+
+Picture the loss as a **valley** and training as walking downhill; `learning_rate` is the
+length of each step you take:
+
+```text
+   too SMALL (1e-6)            just RIGHT (1e-3)           too BIG (1e-1)
+   crawls, may get stuck       smooth descent to the       overshoots, bounces
+                               bottom                       across the valley, diverges
+
+   loss                        loss                        loss
+    \                           \                            \      ●
+     \●                          \                         ●   \   / \   ●
+      \●                          \●                        \   \ /   \ /
+       \●                          \ ●                        \   ●     ●
+        \●__                        \  ●__                     \ /  (loss → NaN)
+          ●●●●  (still high)         \___ ●●  (reaches min)     ●
+   ──────────────► steps        ──────────────► steps      ──────────────► steps
+```
+
+Each `●` is one optimizer step of size `learning_rate × gradient`. Small steps need many
+iterations to reach the bottom; oversized steps leap *past* the minimum and can climb back
+*out* of the valley (the loss explodes to NaN). The schedule below — big steps early,
+shrinking steps late — gets the best of both.
+
+**`batch_size = 16` — sequences processed in parallel.** How many independent
+`block_size`-length chunks go through each forward/backward pass. The gradient is
+**averaged** over the batch, so a larger batch gives a **less noisy, more reliable**
+gradient estimate (smoother, more stable training) — at the cost of more memory. It
+interacts with learning rate: bigger batches tolerate (and often want) bigger learning
+rates. When you can't fit a big batch in memory, **gradient accumulation** simulates one
+by summing gradients over several small batches before stepping.
+
+> **Intuition (char-level).** Instead of learning from one snippet of text at a time, the
+> model reads **16 different snippets at once** and averages the lessons. One snippet might
+> say "after `t` comes `h`"; another "after `t` comes `o`" — averaging 16 gives a *truer*
+> sense of what really follows `t` than trusting any single example.
+
+More examples per step = a less jittery direction downhill:
+
+```text
+   small batch (noisy gradient)        large batch (smooth gradient)
+   each step guesses "downhill"        averaging many examples points
+   from few examples → zig-zags        more reliably at the true minimum
+
+        ●                                   ●
+       ╱ ╲   ╱╲                              ╲
+      ●   ╲ ╱  ╲ ●                            ●
+           ●    ╲╱                             ╲
+                 ● (wanders down)               ● (glides down)
+```
+
+The trade-off is memory: 16 snippets fit easily; thousands need a big GPU (or gradient
+accumulation to fake it).
+
+**`max_iters = 5000` — how long to train.** The number of optimizer steps. Total tokens
+seen ≈ `max_iters × batch_size × block_size`. Too few → undertrained; too many →
+diminishing returns (and, with a small dataset, eventual overfitting). Modern guidance
+(Chinchilla scaling) says compute-optimal training uses **~20 tokens per parameter** — a
+rule of thumb for picking this against model size.
+
+### The bookkeeping knobs (no effect on the model)
+
+**`eval_interval = 100`** — every 100 steps, pause and estimate train/val loss.
+**`eval_iters = 200`** — average the loss over 200 batches when doing that estimate, so the
+number isn't noisy. **`device`** — run on GPU (`cuda`) if available, else CPU. None of
+these change the trained model; they're for monitoring and hardware. (The `estimate_loss`
+function runs under `@torch.no_grad()` and toggles `model.eval()`/`model.train()` so
+dropout and other train-only behavior are off during measurement.)
+
+### How To Actually Tune These
+
+You don't tune all ten at once — that's a ten-dimensional search you can't afford. The
+craft is knowing **which knobs matter most, in what order, and how they scale.**
+
+**1. Learning rate first — it dominates everything.** It's widely considered the single
+most important hyperparameter. The standard search is a coarse **logarithmic sweep** —
+try `1e-5, 1e-4, 1e-3, 1e-2, …` and watch the loss curve: pick the largest rate that
+still trains *stably* (no spikes), then refine around it. In real LLM training the LR is
+not constant but follows a **schedule**:
+
+```text
+   lr
+    │        ╭─────╮                   ① WARMUP (≈10% of steps): ramp 0 → peak,
+    │       ╱       ╲___                  linearly. Stops early giant steps from
+    │      ╱            ╲___               blowing up a freshly-initialized model.
+    │     ╱                 ╲___        ② COSINE DECAY: ease peak → ~0 over the rest,
+    │    ╱                      ╲__        so late training takes ever-finer steps
+    └───┴──────────────────────────► step  and settles into a good minimum.
+        warmup            decay
+```
+
+**2. Batch size: as large as memory allows, then co-tune the LR.** Larger batch = smoother
+gradient = more stable, faster wall-clock training; it's mostly bounded by GPU memory
+(use gradient accumulation to go beyond it). Because big batches early in training can be
+unstable, contemporary runs use **batch-size ramp-up** (start small, grow it). Batch size
+and learning rate move *together* — change one, re-check the other.
+
+**3. Architecture (width/depth) via scaling laws, tuned small then scaled up.** Don't
+grid-search `n_embd`/`n_layer` on the full model — it's too expensive. The field relies on
+**scaling laws**: train several *small* models, find the trend, and extrapolate, because
+optimal hyperparameters and final losses scale *predictably* with model size. Practical
+rules: balance depth and width rather than maxing one; keep `n_embd` divisible by
+`n_head`; use Chinchilla's ~20-tokens-per-parameter to match `max_iters` to model size.
+
+**4. Dropout / weight decay last, only if you're overfitting.** Turn regularization *up*
+only when val loss pulls away from train loss. `0.0` for big-corpus pretraining, `0.1+`
+for finetuning. (Recent scaling work even finds optimal **weight decay scales linearly
+with batch size** — these knobs are coupled, not independent.)
+
+**On search strategy:** for the few knobs worth sweeping, **random search beats grid
+search** — with a fixed budget, random sampling covers the important dimensions far better
+than a rigid grid that wastes trials varying knobs that don't matter. **Bayesian
+optimization** (e.g. Optuna, Ax) is the next step up: it uses past trials to propose the
+next promising configuration instead of sampling blindly. But the highest-leverage move is
+always the same — **nail the learning rate and its schedule first**; everything else is a
+smaller correction on top.
+
+```text
+   the tuning priority ladder (most bang-for-buck at the top):
+
+     1. learning rate + schedule   ← spend your effort here
+     2. batch size (+ its LR coupling)
+     3. width / depth via scaling laws (tune small, extrapolate)
+     4. regularization (dropout / weight decay) — only if overfitting
+```
+
+Sources: [Tuning Optimizer Hyperparameters (apxml)](https://apxml.com/courses/how-to-build-a-large-language-model/chapter-17-optimization-algorithms-llms/choosing-optimizer-hyperparameters),
+[Hyperparameter Optimization for LLMs (Deepchecks)](https://deepchecks.com/hyperparameter-optimization-llms-best-practices-advanced-techniques/),
+[Power Lines: Scaling Laws for Weight Decay and Batch Size in LLM Pre-training](https://arxiv.org/pdf/2505.13738),
+[nanoGPT training parameters](https://www.mintlify.com/karpathy/nanoGPT/configuration/training-params).
+
+---
+
+## The Whole Machine: A Visual Walkthrough
+
+We built each part in isolation. Now zoom all the way out and watch a single file run
+top to bottom. Rather than re-reading 150 lines of code, hold **five zones** in your head
+— this is the map of the entire script:
+
+```text
+   ┌─ ① CONFIG ────── the knobs            batch_size, block_size, n_embd, n_head, ...
+   ├─ ② DATA ──────── text → numbers       chars, stoi/itos, encode/decode, get_batch
+   ├─ ③ MODEL ─────── the network          Head → MultiHead → FeedForward → Block → GPT
+   ├─ ④ TRAIN ─────── the learning loop    forward → zero → backward → step  (×5000)
+   └─ ⑤ GENERATE ──── make new text        sample one char, append, repeat
+```
+
+Everything below is just those five zones, drawn out.
+
+### ② DATA — turn a book into batches of integers
+
+The model can't read letters, only numbers. So we build a tiny **character codec** and
+chop the text into training examples:
+
+```text
+   raw text ──► sorted unique chars = the vocab (≈65)
+                     │
+                     ├─ stoi:  'a'→0  'b'→1  ...     (encode: string → list of ints)
+                     └─ itos:  0→'a'  1→'b'  ...     (decode: ints → string)
+
+   encode(entire text) ──► data = one long tensor of ints
+                                   │
+                                   ├─ first 90%  ─► train_data
+                                   └─ last  10%  ─► val_data   (held out, to catch overfit)
+```
+
+### ② DATA — the `get_batch` offset trick (the heart of "predict the next char")
+
+This is the one idea worth burning in: **`y` is just `x` shifted one character to the
+right.** Every position in `x` is asked to predict the character sitting at the *same*
+position in `y`:
+
+```text
+   pick a random start i, take a window of block_size chars:
+
+   data:  ... │ t  h  e     c  o  n  s  o  n  a │ n  t ...
+              i └─────────── block_size ────────┘
+
+   x = data[i   : i+block_size]   =  t h e   c o n s o n a      (the input)
+   y = data[i+1 : i+block_size+1] =  h e   c o n s o n a n      (input shifted +1)
+                                     ▲
+        x: "t"   should predict →  y: "h"
+        x: "th"  should predict →  y:   "e"
+        x: "the" should predict →  y:     " "      ... block_size predictions at once
+
+   stack batch_size such windows  ─►  x, y are both (B, T) = (16, 32)
+```
+
+One slice gives you `block_size` next-char predictions for free — that's why training is
+so efficient.
+
+### ③ MODEL — the forward pass as a shape journey
+
+Feeding `idx` `(B,T)` through the model is just a sequence of shape transforms. Follow
+the **width**: it becomes `n_embd=64` at the embedding and stays there until the very
+last layer projects it to vocab scores:
+
+```text
+   idx                       (B, T)            integers — which char at each position
+    │  token_embedding  +  position_embedding
+    ▼
+   x                         (B, T, 64)        "what char"  +  "which position"
+    │  self.blocks  =  4 × [ x + MHA(ln1 x);  x + FFN(ln2 x) ]
+    ▼
+   x                         (B, T, 64)        talked + thought, four rounds deep
+    │  ln_f         (final LayerNorm)
+    ▼
+    │  lm_head      Linear(64 → vocab)
+    ▼
+   logits                    (B, T, vocab)     a score for EVERY possible next char,
+    │                                          at EVERY position
+    │  cross_entropy(logits, targets)          (only when training)
+    ▼
+   loss                      ()                one number: how wrong were we?
+```
+
+`cross_entropy` flattens `(B,T,vocab)` → `(B·T, vocab)` so every position in every
+sequence is one training example — `16 × 32 = 512` predictions scored per batch.
+
+### ④ TRAIN — the four-beat loop, 5000 times
+
+The optimization loop is the same four beats you'll see in *every* PyTorch model, forever:
+
+```text
+   for iter in range(max_iters):          # 5000 steps
+
+       ┌─ (every 100 steps) estimate_loss() on train & val ── print progress
+       │     runs under @torch.no_grad() + model.eval()  (dropout off, no gradients)
+       │
+       xb, yb = get_batch('train')        # ← a fresh random batch
+
+       ① logits, loss = model(xb, yb)     #  FORWARD   — predict, measure error
+       ② optimizer.zero_grad()            #  CLEAR     — wipe last step's gradients
+       ③ loss.backward()                  #  BACKWARD  — gradients flow to every weight
+       ④ optimizer.step()                 #  UPDATE    — AdamW nudges weights downhill (lr)
+```
+
+**Remember it as: forward → zero → backward → step.** Forget `zero_grad` and gradients
+*accumulate* across steps — a classic, silent bug.
+
+### ⑤ GENERATE — autoregression: sample one, append, repeat
+
+Sampling is a loop that keeps feeding the model its own output. Start from a single token
+and grow the sequence one character at a time:
+
+```text
+   idx = [[0]]                         # a single starting token
+   repeat max_new_tokens times:
+
+       idx_cond = idx[:, -block_size:]      crop to the last block_size chars (the window)
+       logits   = model(idx_cond)           predict next-char scores at every position
+       logits   = logits[:, -1, :]          keep ONLY the last position (the newest char)
+       probs    = softmax(logits)           scores → a probability over the vocab
+       idx_next = multinomial(probs)        SAMPLE one char (not argmax → variety)
+       idx      = cat(idx, idx_next)        append it, and loop with the longer context
+
+   decode(idx) ──► readable text
+```
+
+Two details that matter: we take `logits[:, -1, :]` because only the **last** position's
+prediction is new, and we **sample** (`multinomial`) instead of taking the most-likely
+char — sampling is what gives the output its variety instead of a repetitive loop.
+
+### The payoff: what 5000 steps actually produced
+
+Run it, and after ~5000 steps on a small TinyStories-style corpus the loss settles at:
+
+```text
+   step 4999:  train loss 1.6635,  val loss 1.8226
+```
+
+And the model — which started as **pure random characters** — now generates this from a
+cold start:
+
+```text
+   Once upon a time, there was a little girl named Lily. She shoes too say yum."
+   Her mom asked him and he swimn around in the airprisess. He was so excited.
+   When she got scared. She want to the trunking at his ceat splashing in the trees...
+   <|endoftext|>
+   Once upon a time, twoot beliely. They had wore dreaming.
+```
+
+Look at what emerged **with zero hand-coded grammar** — real words, capitalization after
+periods, quotation marks that (mostly) close, `<|endoftext|>` boundaries between stories,
+and the "Once upon a time" cadence of the training data. It's not *correct* English
+("swimn", "airprisess"), but it's unmistakably **English-shaped**, learned purely from
+predicting the next character.
+
+One last thing to notice — the loss line is also a lesson: **train 1.66 vs val 1.82.**
+That gap is the overfitting we predicted; with `dropout = 0.0` nothing is holding it back.
+That single number is your cue for the *next* experiment — turn on dropout, add data, or
+grow the model — which is exactly the loop real LLM training lives in.
+
+---
+
+## How Far Is This From a Real GPT?
+
+The thing we just built and a frontier GPT are **the same architecture** — the difference
+is almost entirely *scale*. Here's our model next to GPT-3 175B (the largest in the
+original GPT-3 paper, Table 2.1):
+
+| Knob | Our tiny GPT | GPT-3 (175B) | Ratio |
+|---|---|---|---|
+| Parameters | ~0.2 M | 175 B | ~1,000,000× |
+| Layers (`n_layer`) | 4 | 96 | 24× |
+| Embedding width (`n_embd` / `d_model`) | 64 | 12,288 | 192× |
+| Heads (`n_head`) | 4 | 96 | 24× |
+| Head size (`d_head`) | 16 | 128 | 8× |
+| Context length (`block_size`) | 32 | 2,048 | 64× |
+| Batch size | 16 seqs (~512 tokens) | 3.2 M tokens | ~6,000× |
+| Vocab | ~65 characters | ~50,257 BPE subwords | — |
+| Training data | ~300 K tokens | 300 B tokens | ~1,000,000× |
+| Learning rate | 1e-3 | 0.6e-4 | smaller as it scales |
+| Hardware | one laptop / GPU | thousands of GPUs | — |
+
+```text
+   what's the SAME                          what's DIFFERENT
+   ───────────────                          ────────────────
+   • decoder-only transformer               • every number is 10–10⁶× bigger
+   • token + position embeddings            • BPE subword vocab, not characters
+   • masked multi-head self-attention       • context measured in thousands, not 32
+   • residual + pre-LayerNorm blocks        • training infra: thousands of GPUs,
+   • feed-forward (4× inner) + softmax        months of compute, trillions of tokens
+                                              (modern frontier models, beyond GPT-3)
+```
+
+Read the table as one message: **the architecture you understand now is the real one.**
+GPT-3 is this exact diagram with bigger numbers and a serious infrastructure problem.
+Notice even the learning rate follows the rule from the tuning section — it *shrinks* as
+the model grows (`1e-3` for ours, `0.6e-4` for 175B).
+
+## After Pretraining: Alignment (SFT → Reward Model → PPO)
+
+There's one more gap, and it isn't size. The model we trained is a **pretrained base
+model**: all it knows how to do is *continue text that looks like its training data*. Ask
+it a question and it won't answer — it'll babble on in the style of the corpus, maybe
+inventing more questions. It is **unaligned**: fluent, but with no notion of being
+*helpful*. That behavior is undefined and often useless on its own.
+
+Turning a babbling base model into a helpful assistant (the ChatGPT you actually talk to)
+is a second phase called **alignment**, done with **fine-tuning**. The InstructGPT recipe
+is three stages:
+
+<div align="center">
+<img src="assets/10_rlhf_three_stages.png" alt="The three-stage RLHF / InstructGPT alignment pipeline. Step 1: collect demonstration data and train a supervised policy — a prompt is sampled, a human labeler writes the ideal answer, and the base model is fine-tuned on these (prompt, answer) pairs (SFT). Step 2: collect comparison data and train a reward model — for one prompt the model samples several outputs, a human ranks them best to worst, and a reward model is trained to predict those rankings. Step 3: optimize a policy against the reward model with PPO reinforcement learning — a new prompt is sampled, the policy generates an output, the reward model scores it, and PPO updates the policy to produce higher-scoring answers." width="820">
+</div>
+
+<p align="center"><sub><em>The three-stage RLHF pipeline from <a href="https://arxiv.org/abs/2203.02155">InstructGPT</a> (Ouyang et al., 2022).</em></sub></p>
+
+**Stage 1 — Supervised fine-tuning (SFT): teach it the *format* of being helpful.**
+Humans write thousands of high-quality `(prompt, ideal answer)` demonstrations — a
+question on top, the desired answer below. We then continue training the *same* base model
+on these examples. Nothing about the architecture changes; we're just shifting its
+"continue the text" instinct toward documents that look like **question → complete,
+helpful answer**. After SFT it will at least *attempt* to answer instead of babble.
+
+**Stage 2 — Train a reward model: teach a model what *good* looks like.** Demonstrations
+are expensive, and "the one right answer" is fuzzy — but humans are good at *comparing*.
+So for a given prompt we sample **several** answers from the SFT model and have a labeler
+**rank them best → worst**. Those rankings train a separate **reward model**: a network
+that takes a `(prompt, answer)` and outputs a single scalar — *how good is this answer?*
+It's a learned, automatable stand-in for human preference.
+
+**Stage 3 — PPO: optimize the model to score high reward.** Now reinforcement learning.
+Initialize the **policy** (the thing generating text) from the SFT model. Loop: sample a
+prompt, let the policy generate an answer, score that answer with the **reward model**,
+and use **PPO** (Proximal Policy Optimization) to nudge the policy so the answers it
+generates earn **higher reward**. Over many rounds the model's *sampling policy* shifts
+toward responses the reward model — and therefore humans — prefer.
+
+```text
+   PRETRAIN  ──►  SFT  ──►  REWARD MODEL  ──►  PPO  ──►  aligned assistant
+   "continue     "answer    "learn what       "optimize to
+    any text"     in this    humans rank        score high on
+    (unaligned)   format"    as good"           that preference"
+
+   base model = the part WE built. everything after it is alignment.
+```
+
+That whole second phase — **RLHF, Reinforcement Learning from Human Feedback** — is the
+bridge from the next-character predictor in this post to a model that follows
+instructions. The base model is the foundation; alignment is what makes it *talk to you*.
+And the foundation is exactly the machine you just built from scratch.
